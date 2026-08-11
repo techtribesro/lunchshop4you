@@ -50,19 +50,34 @@ def _format_date_cz(d: date) -> str:
     return f"{DAY_NAMES_CZ[d.weekday()]} {d.day}. {d.month}. {d.year}"
 
 
-def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str, str]) -> str:
-    per_item: dict[str, dict[str, int | list[str]]] = defaultdict(lambda: {"qty": 0, "notes": []})
+def _group_by_item(rows: list[tuple[str, Order]]) -> dict[str, dict]:
+    per_item: dict[str, dict] = defaultdict(lambda: {"qty": 0, "buyers": [], "notes": []})
     for username, order in rows:
         entry = per_item[order.item_name]
         entry["qty"] += order.quantity
+        entry["buyers"].append(f"{username} ×{order.quantity}")
         if order.note:
             entry["notes"].append(f"{order.note} ({username})")
+    return per_item
+
+
+def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str, str]) -> str:
+    per_item = _group_by_item(rows)
+
+    def notes_cell(notes: list[str]) -> str:
+        if not notes:
+            return '<span style="color:#5b6156;">&mdash;</span>'
+        return (
+            '<span style="display:inline-block;border:1px solid #c0392b;border-radius:4px;'
+            'padding:3px 7px;color:#c0392b;">' + "; ".join(notes) + "</span>"
+        )
 
     summary_rows = "".join(
         f"""<tr>
               <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;">{item_name}</td>
               <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;text-align:center;font-weight:600;">{data['qty']}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;color:#5b6156;">{"; ".join(data["notes"]) or "&mdash;"}</td>
+              <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;">{", ".join(data["buyers"])}</td>
+              <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;">{notes_cell(data["notes"])}</td>
             </tr>"""
         for item_name, data in per_item.items()
     )
@@ -77,6 +92,7 @@ def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str,
           <tr style="background:#e3ead9;">
             <th style="padding:6px 10px;text-align:left;">Jídlo</th>
             <th style="padding:6px 10px;text-align:center;">Počet</th>
+            <th style="padding:6px 10px;text-align:left;">Kdo</th>
             <th style="padding:6px 10px;text-align:left;">Poznámky</th>
           </tr>
         </thead>
@@ -89,17 +105,12 @@ def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str,
 
 
 def _build_text(order_date: date, rows: list[tuple[str, Order]], copy: dict[str, str]) -> str:
-    per_item: dict[str, dict[str, int | list[str]]] = defaultdict(lambda: {"qty": 0, "notes": []})
-    for username, order in rows:
-        entry = per_item[order.item_name]
-        entry["qty"] += order.quantity
-        if order.note:
-            entry["notes"].append(f"{order.note} ({username})")
+    per_item = _group_by_item(rows)
 
     lines = [copy["greeting"], "", copy["intro"], ""]
     for item_name, data in per_item.items():
         notes = f" [{'; '.join(data['notes'])}]" if data["notes"] else ""
-        lines.append(f"- {data['qty']}x {item_name}{notes}")
+        lines.append(f"- {data['qty']}x {item_name} ({', '.join(data['buyers'])}){notes}")
     lines += ["", copy["thanks"], settings.order_summary_sender_name]
     return "\n".join(lines)
 
