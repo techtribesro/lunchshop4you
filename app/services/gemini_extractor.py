@@ -28,6 +28,10 @@ Extract every item as an object with:
 - item_name: the dish name in Czech, without allergen codes like (1,3,7)
 - description: any extra descriptive text beyond the name, or "" if none
 - price_czk: the price in Czech crowns as an integer (strip "Kč", commas, and any other non-digit characters)
+- calories_kcal: your best-estimate integer calorie count for one typical
+  restaurant portion of this dish, based on its name/description and your
+  general knowledge of the ingredients and cuisine -- exact values aren't
+  expected
 
 Ignore the allergen legend, opening hours, and any text that isn't a menu item."""
 
@@ -41,8 +45,9 @@ RESPONSE_SCHEMA = {
             "item_name": {"type": "STRING"},
             "description": {"type": "STRING"},
             "price_czk": {"type": "INTEGER"},
+            "calories_kcal": {"type": "INTEGER"},
         },
-        "required": ["day", "category", "item_name", "price_czk"],
+        "required": ["day", "category", "item_name", "price_czk", "calories_kcal"],
     },
 }
 
@@ -78,6 +83,10 @@ def extract_menu_with_gemini(pdf_bytes: bytes) -> list[ParsedMenuItem]:
         except (KeyError, TypeError, ValueError):
             logger.warning("Skipping item with unparseable price: %r", raw)
             continue
+        try:
+            calories = int(raw["calories_kcal"])
+        except (KeyError, TypeError, ValueError):
+            calories = None
         items.append(
             ParsedMenuItem(
                 day=day,
@@ -85,6 +94,7 @@ def extract_menu_with_gemini(pdf_bytes: bytes) -> list[ParsedMenuItem]:
                 item_name=str(raw.get("item_name", "")).strip(),
                 description=str(raw.get("description", "")).strip(),
                 price_czk=price,
+                calories_kcal=calories,
             )
         )
 

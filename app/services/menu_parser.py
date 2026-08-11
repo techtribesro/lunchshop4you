@@ -60,6 +60,7 @@ class ParsedMenuItem:
     item_name: str
     description: str
     price_czk: int
+    calories_kcal: int | None = None
 
 
 class MenuParseError(Exception):

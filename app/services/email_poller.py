@@ -102,9 +102,10 @@ def fetch_latest_menu_source() -> tuple[str, bytes | str]:
 def refresh_menu(db: Session) -> int:
     """Fetches, parses, and bulk-replaces the current week's menu.
     Returns the number of items stored. PDF attachments are parsed by
-    Gemini directly (see gemini_extractor); a plain-text email body (no
-    PDF) uses the regex parser instead, since that's not Gemini's problem
-    to begin with."""
+    Gemini directly (see gemini_extractor), which estimates calories in the
+    same call -- one Gemini request instead of two, which matters on the
+    20-req/day free tier. The plain-text fallback path has no Gemini call
+    to piggyback on, so it estimates calories separately."""
     kind, payload = fetch_latest_menu_source()
 
     if kind == "pdf":
@@ -114,8 +115,9 @@ def refresh_menu(db: Session) -> int:
             raise EmailPollError(f"Gemini menu extraction failed: {exc}") from exc
     else:
         parsed_items = parse_menu_email(payload)
-
-    calories_by_name = estimate_calories(parsed_items)
+        calories_by_name = estimate_calories(parsed_items)
+        for item in parsed_items:
+            item.calories_kcal = calories_by_name.get(item.item_name)
 
     current_week = week_start()
     parsed_at = now_local_naive()
@@ -129,7 +131,7 @@ def refresh_menu(db: Session) -> int:
             item_name=item.item_name,
             description=item.description,
             price_czk=item.price_czk,
-            calories_kcal=calories_by_name.get(item.item_name),
+            calories_kcal=item.calories_kcal,
             parsed_at=parsed_at,
         )
         for item in parsed_items
