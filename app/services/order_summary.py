@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Order, User
-from app.services.gemini_client import GeminiError, generate_json
 from app.timezone import today_local
 
 logger = logging.getLogger("order_summary")
@@ -30,19 +29,13 @@ DAY_NAMES_CZ = {
     6: "neděle",
 }
 
-COPY_RESPONSE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "greeting": {"type": "STRING"},
-        "intro": {"type": "STRING"},
-        "thanks": {"type": "STRING"},
-    },
-    "required": ["greeting", "intro", "thanks"],
-}
-
-# Used only if Gemini is unconfigured or the call fails -- keeps the email
-# sendable, at the cost of a plain (non-vocative) greeting.
-FALLBACK_COPY = {
+# Static rather than Gemini-generated: this email sends automatically every
+# weekday, and the free-tier Gemini quota (20 requests/day, shared with menu
+# parsing and calorie estimation) is too tight to spend one call a day on a
+# greeting. Not fully correct Czech vocative case for an arbitrary name, but
+# ORDER_SUMMARY_RECIPIENT_NAME is fixed per deployment, so it only needs to
+# read right once.
+EMAIL_COPY = {
     "greeting": f"Dobrý den, {settings.order_summary_recipient_name},",
     "intro": "posíláme naši dnešní objednávku obědů, viz tabulka níže:",
     "thanks": "Děkujeme,",
@@ -55,44 +48,6 @@ class OrderSummaryError(Exception):
 
 def _format_date_cz(d: date) -> str:
     return f"{DAY_NAMES_CZ[d.weekday()]} {d.day}. {d.month}. {d.year}"
-
-
-def _generate_copy(order_date: date) -> dict[str, str]:
-    """Has Gemini write the Czech greeting/intro/thanks lines -- correct
-    vocative case and natural phrasing aren't something to hand-roll in
-    Python. The order data itself (table rows) never goes through the LLM;
-    only this wrapper prose does, and a static fallback covers the case
-    where Gemini is unavailable."""
-    prompt = f"""Write copy for a short daily work email in Czech, sent by an office
-colleague ordering lunch to a restaurant contact.
-
-Context:
-- Recipient's first name: {settings.order_summary_recipient_name}
-- Today's date (already Czech-formatted): {_format_date_cz(order_date)}
-- Right after your "intro" line, the email inserts a table with today's lunch
-  order, then your "thanks" line followed by the sender's name (appended
-  separately -- do not include any name in "thanks").
-
-Return JSON with:
-- "greeting": a short opening line addressing the recipient by name in the
-  correct Czech vocative case (e.g. "Dobrý den, Honzo,")
-- "intro": one short sentence saying today's lunch order follows below,
-  naturally referencing the date
-- "thanks": a brief closing thanks phrase on its own, e.g. "Děkujeme," --
-  no name
-
-Tone: friendly, professional, concise -- like real Czech office
-correspondence between colleagues who know each other, not stiff or
-robotic."""
-
-    try:
-        result = generate_json([{"text": prompt}], COPY_RESPONSE_SCHEMA)
-        if not isinstance(result, dict) or not all(k in result for k in ("greeting", "intro", "thanks")):
-            raise GeminiError(f"Unexpected copy shape: {result!r}")
-        return {k: str(result[k]) for k in ("greeting", "intro", "thanks")}
-    except GeminiError as exc:
-        logger.warning("Gemini copy generation failed (%s); using fallback text", exc)
-        return FALLBACK_COPY
 
 
 def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str, str]) -> str:
@@ -189,14 +144,12 @@ def send_daily_order_summary(db: Session, order_date: date | None = None) -> int
         logger.info("No orders for %s; skipping summary email", order_date)
         return 0
 
-    copy = _generate_copy(order_date)
-
     message = MIMEMultipart("alternative")
     message["Subject"] = f"Objednávka obědů – {_format_date_cz(order_date)}"
     message["From"] = f"{settings.order_summary_sender_name} <{settings.gmail_imap_user}>"
     message["To"] = settings.order_summary_recipient_email
-    message.attach(MIMEText(_build_text(order_date, rows, copy), "plain", "utf-8"))
-    message.attach(MIMEText(_build_html(order_date, rows, copy), "html", "utf-8"))
+    message.attach(MIMEText(_build_text(order_date, rows, EMAIL_COPY), "plain", "utf-8"))
+    message.attach(MIMEText(_build_html(order_date, rows, EMAIL_COPY), "html", "utf-8"))
 
     try:
         with smtplib.SMTP(settings.gmail_smtp_host, settings.gmail_smtp_port, timeout=30) as smtp:
