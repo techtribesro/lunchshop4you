@@ -125,7 +125,7 @@
   .login-mark {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 0;
     margin-bottom: 4px;
   }
   .login-mark .glyph {
@@ -192,7 +192,7 @@
   /* ---------- App chrome ---------- */
   .topbar {
     position: sticky;
-    top: 41px;
+    top: 0;
     z-index: 40;
     display: flex;
     align-items: center;
@@ -204,7 +204,7 @@
   .wordmark {
     display: flex;
     align-items: baseline;
-    gap: 7px;
+    gap: 0;
     font-size: 19px;
     white-space: nowrap;
   }
@@ -368,6 +368,13 @@
     color: var(--ink-muted);
     font-weight: 500;
   }
+  .item-kcal {
+    margin-left: 8px;
+    color: var(--ink-faint);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .item-kcal::before { content: "· "; }
   .item-desc {
     color: var(--ink-muted);
     font-size: 13px;

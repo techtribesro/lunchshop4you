@@ -78,13 +78,20 @@ def order_page(
                 "name": item.item_name,
                 "desc": item.description,
                 "price": item.price_czk,
+                "kcal": item.calories_kcal,
             }
         )
 
     today_label = DAY_LABELS_CZ.get(DAY_NAMES[today.weekday()]) if is_weekday else None
+    calories_by_item_name = {item.item_name: item.calories_kcal for item in week_items}
 
     existing_orders = {
-        order.item_name: {"qty": order.quantity, "note": order.note, "price": order.unit_price_czk}
+        order.item_name: {
+            "qty": order.quantity,
+            "note": order.note,
+            "price": order.unit_price_czk,
+            "kcal": calories_by_item_name.get(order.item_name),
+        }
         for order in db.query(Order).filter(Order.user_id == user.id, Order.order_date == today).all()
     }
 
@@ -99,7 +106,12 @@ def order_page(
         if window is not None:
             early_label = DAY_LABELS_CZ.get(DAY_NAMES[early_date.weekday()])
             early_existing_orders = {
-                order.item_name: {"qty": order.quantity, "note": order.note, "price": order.unit_price_czk}
+                order.item_name: {
+                    "qty": order.quantity,
+                    "note": order.note,
+                    "price": order.unit_price_czk,
+                    "kcal": calories_by_item_name.get(order.item_name),
+                }
                 for order in db.query(Order).filter(Order.user_id == user.id, Order.order_date == early_date).all()
             }
 

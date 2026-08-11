@@ -74,6 +74,7 @@
             <span>Celkem</span>
             <span class="amount tabular" id="summary-total">0 Kč</span>
           </div>
+          <div class="stat-kcal tabular" id="summary-total-kcal" style="text-align:right;"></div>
           <button class="btn-primary" type="button" id="submit-order">Odeslat objednávku</button>
           <p class="submit-status" id="submit-status-desktop"></p>
           <p class="summary-note">Do {{ cutoff_time }} lze objednávku kdykoli upravit.</p>
@@ -222,17 +223,17 @@
 
     let selectedDay = TODAY || DAYS[0];
 
-    const carts = {}; // dateIso -> { item_name: {price, qty, note} }
+    const carts = {}; // dateIso -> { item_name: {price, qty, note, kcal} }
     if (TODAY_ISO) {
       carts[TODAY_ISO] = {};
       {% for name, entry in existing_orders.items() %}
-        carts[TODAY_ISO][{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }} };
+        carts[TODAY_ISO][{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }}, kcal: {{ entry.kcal | tojson }} };
       {% endfor %}
     }
     if (EARLY_ISO) {
       carts[EARLY_ISO] = {};
       {% for name, entry in early_existing_orders.items() %}
-        carts[EARLY_ISO][{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }} };
+        carts[EARLY_ISO][{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }}, kcal: {{ entry.kcal | tojson }} };
       {% endfor %}
     }
 
@@ -300,6 +301,7 @@
           const main = document.createElement("div");
           main.className = "item-main";
           main.innerHTML = `<span class="item-name">${it.name}</span><span class="item-price tabular">${it.price} Kč</span>` +
+            (it.kcal ? `<span class="item-kcal tabular">${it.kcal} kcal</span>` : "") +
             (it.desc ? `<div class="item-desc">${it.desc}</div>` : "");
           itemRow.appendChild(main);
 
@@ -341,7 +343,7 @@
       const next = Math.max(0, current + delta);
       const existingNote = cart[item.name]?.note || "";
       if (next === 0) delete cart[item.name];
-      else cart[item.name] = { price: item.price, qty: next, note: existingNote };
+      else cart[item.name] = { price: item.price, qty: next, note: existingNote, kcal: item.kcal };
       renderMenu();
       renderSummary();
     }
@@ -351,11 +353,13 @@
       const cart = currentCart();
       const totalEl = document.getElementById("summary-total");
       const totalMobileEl = document.getElementById("summary-total-mobile");
+      const totalKcalEl = document.getElementById("summary-total-kcal");
 
       if (cart === null) {
         body.innerHTML = '<p class="summary-empty">Pro tento den nelze objednávat.</p>';
         totalEl.textContent = fmt(0);
         totalMobileEl.textContent = fmt(0);
+        totalKcalEl.textContent = "";
         return;
       }
 
@@ -375,6 +379,8 @@
       const total = entries.reduce((sum, e) => sum + e.price * e.qty, 0);
       totalEl.textContent = fmt(total);
       totalMobileEl.textContent = fmt(total);
+      const totalKcal = entries.reduce((sum, e) => sum + (e.kcal || 0) * e.qty, 0);
+      totalKcalEl.textContent = totalKcal > 0 ? `≈ ${totalKcal.toLocaleString("cs-CZ")} kcal` : "";
     }
 
     async function submitOrder() {
