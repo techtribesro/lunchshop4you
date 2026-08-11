@@ -44,7 +44,11 @@ def generate_json(parts: list[dict], response_schema: dict) -> dict | list:
     try:
         with urllib.request.urlopen(request, timeout=60, context=_SSL_CONTEXT) as resp:
             payload = json.loads(resp.read())
-    except urllib.error.URLError as exc:
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        # A read timeout past connection establishment surfaces as a bare
+        # TimeoutError/OSError, not urllib.error.URLError -- every caller
+        # treats GeminiError as "fall back gracefully", so anything network-
+        # related here needs to actually land in that bucket.
         raise GeminiError(f"Gemini request failed: {exc}") from exc
 
     try:

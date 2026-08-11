@@ -1,10 +1,8 @@
 import email
 import imaplib
-import io
 import logging
 from email.header import decode_header
 
-import pdfplumber
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -15,11 +13,6 @@ from app.services.menu_parser import parse_menu_email
 from app.timezone import now_local_naive, week_start
 
 logger = logging.getLogger("email_poller")
-
-# Only used to score candidate text blocks pulled out of the menu PDF (see
-# _extract_menu_text_from_pdf) -- independent of menu_parser's own diacritic
-# handling.
-DAY_HEADERS_ACCENTED = ["PONDĚLÍ", "ÚTERÝ", "STŘEDA", "ČTVRTEK", "PÁTEK"]
 
 # How many of the most recent inbox messages to scan for a menu attachment.
 MAX_MESSAGES_TO_SCAN = 20
@@ -58,34 +51,6 @@ def _find_pdf_attachment(msg: email.message.Message) -> bytes | None:
         if filename.lower().endswith(".pdf"):
             return part.get_payload(decode=True)
     return None
-
-
-def _extract_menu_text_from_pdf(pdf_bytes: bytes) -> str:
-    """The vendor's PDF renders each day/category as separate text runs
-    whose stream order doesn't match visual order, so a plain
-    page.extract_text() call scrambles the menu. One of the table cells
-    pdfplumber detects, however, preserves the real "Category: Item
-    (allergens) Price" reading order -- so every extracted text block
-    (whole-page text and every table cell) is scored by how much it looks
-    like the menu, and the best-scoring one is used."""
-
-    def score(text: str) -> int:
-        return sum(text.count(day) for day in DAY_HEADERS_ACCENTED) + text.count("Kč")
-
-    candidates: list[str] = []
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        for page in pdf.pages:
-            candidates.append(page.extract_text() or "")
-            for table in page.extract_tables():
-                for row in table:
-                    for cell in row:
-                        if cell:
-                            candidates.append(cell)
-
-    best = max(candidates, key=score, default="")
-    if score(best) == 0:
-        raise EmailPollError("Could not locate menu content in PDF attachment")
-    return best
 
 
 def fetch_latest_menu_source() -> tuple[str, bytes | str]:
@@ -136,17 +101,17 @@ def fetch_latest_menu_source() -> tuple[str, bytes | str]:
 
 def refresh_menu(db: Session) -> int:
     """Fetches, parses, and bulk-replaces the current week's menu.
-    Returns the number of items stored. PDFs are parsed via Gemini when
-    configured (see gemini_extractor), falling back to the regex/heuristic
-    parser on any failure since the LLM path is non-deterministic."""
+    Returns the number of items stored. PDF attachments are parsed by
+    Gemini directly (see gemini_extractor); a plain-text email body (no
+    PDF) uses the regex parser instead, since that's not Gemini's problem
+    to begin with."""
     kind, payload = fetch_latest_menu_source()
 
     if kind == "pdf":
         try:
             parsed_items = extract_menu_with_gemini(payload)
         except GeminiExtractionError as exc:
-            logger.warning("Gemini extraction failed (%s); falling back to regex parser", exc)
-            parsed_items = parse_menu_email(_extract_menu_text_from_pdf(payload))
+            raise EmailPollError(f"Gemini menu extraction failed: {exc}") from exc
     else:
         parsed_items = parse_menu_email(payload)
 

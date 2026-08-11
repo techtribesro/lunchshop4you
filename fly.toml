@@ -5,7 +5,9 @@ primary_region = "fra"
 
 [env]
   DATABASE_PATH = "/data/lunchshop.db"
-  GOOGLE_SERVICE_ACCOUNT_JSON = "/secrets/service-account.json"
+  # GOOGLE_SERVICE_ACCOUNT_JSON and GOOGLE_SHEETS_SPREADSHEET_ID are set via
+  # `fly secrets set` (inline JSON content, not a file path -- Fly secrets
+  # are env-only, no file mounts).
   GMAIL_IMAP_HOST = "imap.gmail.com"
   GMAIL_IMAP_USER = "lunchshop4you@gmail.com"
   GMAIL_SMTP_HOST = "smtp.gmail.com"
@@ -32,4 +34,4 @@ primary_region = "fra"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  memory = "512mb"
