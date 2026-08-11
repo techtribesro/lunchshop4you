@@ -58,16 +58,6 @@ def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str,
         if order.note:
             entry["notes"].append(f"{order.note} ({username})")
 
-    person_rows = "".join(
-        f"""<tr>
-              <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;">{username}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;">{order.item_name}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;text-align:center;">{order.quantity}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;color:#5b6156;">{order.note or "&mdash;"}</td>
-            </tr>"""
-        for username, order in rows
-    )
-
     summary_rows = "".join(
         f"""<tr>
               <td style="padding:6px 10px;border-bottom:1px solid #e3e1d4;">{item_name}</td>
@@ -85,21 +75,8 @@ def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str,
       <table style="border-collapse:collapse;width:100%;margin-bottom:20px;">
         <thead>
           <tr style="background:#e3ead9;">
-            <th style="padding:6px 10px;text-align:left;">Jméno</th>
             <th style="padding:6px 10px;text-align:left;">Jídlo</th>
             <th style="padding:6px 10px;text-align:center;">Počet</th>
-            <th style="padding:6px 10px;text-align:left;">Poznámka</th>
-          </tr>
-        </thead>
-        <tbody>{person_rows}</tbody>
-      </table>
-
-      <p style="font-weight:600;margin-bottom:6px;">Souhrn podle jídla</p>
-      <table style="border-collapse:collapse;width:100%;margin-bottom:20px;">
-        <thead>
-          <tr style="background:#e3ead9;">
-            <th style="padding:6px 10px;text-align:left;">Jídlo</th>
-            <th style="padding:6px 10px;text-align:center;">Celkem ks</th>
             <th style="padding:6px 10px;text-align:left;">Poznámky</th>
           </tr>
         </thead>
@@ -112,10 +89,17 @@ def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str,
 
 
 def _build_text(order_date: date, rows: list[tuple[str, Order]], copy: dict[str, str]) -> str:
-    lines = [copy["greeting"], "", copy["intro"], ""]
+    per_item: dict[str, dict[str, int | list[str]]] = defaultdict(lambda: {"qty": 0, "notes": []})
     for username, order in rows:
-        note = f" [{order.note}]" if order.note else ""
-        lines.append(f"- {username}: {order.quantity}x {order.item_name}{note}")
+        entry = per_item[order.item_name]
+        entry["qty"] += order.quantity
+        if order.note:
+            entry["notes"].append(f"{order.note} ({username})")
+
+    lines = [copy["greeting"], "", copy["intro"], ""]
+    for item_name, data in per_item.items():
+        notes = f" [{'; '.join(data['notes'])}]" if data["notes"] else ""
+        lines.append(f"- {data['qty']}x {item_name}{notes}")
     lines += ["", copy["thanks"], settings.order_summary_sender_name]
     return "\n".join(lines)
 
