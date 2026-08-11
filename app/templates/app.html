@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oběd</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <style>
+    .submit-status { font-size: 12.5px; text-align: center; margin-top: 8px; min-height: 1.2em; }
+    .submit-status.ok { color: var(--accent-strong); }
+    .submit-status.error { color: var(--critical); }
+    .item-card.is-readonly .item-desc { white-space: normal; overflow: visible; text-overflow: clip; }
+    .item-card.is-readonly { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wordmark"><span class="glyph">Ob</span>ěd</div>
+    <nav class="view-nav">
+      <button type="button" data-goto="order" aria-current="true">Objednávka</button>
+      <button type="button" data-goto="dashboard">Přehled</button>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="user-chip">
+      <div class="avatar" id="user-avatar"></div>
+      <span class="username">{{ user.username }}</span>
+    </div>
+    <button class="link-btn" type="button" id="logout-btn">Odhlásit</button>
+  </div>
+
+  <div class="screen active" id="view-order">
+    <div class="order-shell">
+      <div class="day-row" id="day-row"><!-- day pills injected by JS --></div>
+
+      <div class="cutoff-pill {{ 'critical' if cutoff_state == 'closed' else ('warn' if cutoff_state == 'warn' else '') }}" id="cutoff-pill">
+        <span class="dot"></span>
+        <span id="cutoff-text">
+          {%- if cutoff_state == "open" -%}
+            Objednávky otevřeny do {{ cutoff_time }}
+          {%- elif cutoff_state == "warn" -%}
+            Objednávky se brzy uzavřou ({{ cutoff_time }})
+          {%- else -%}
+            Objednávky jsou dnes uzavřené
+          {%- endif -%}
+        </span>
+      </div>
+
+      <div class="order-grid">
+        <div id="menu-list"><!-- category blocks injected by JS --></div>
+
+        <aside class="summary-rail">
+          <h3 class="summary-title">Vaše objednávka</h3>
+          <div id="summary-body">
+            <p class="summary-empty">Zatím nic nevybráno.</p>
+          </div>
+          <div class="summary-total">
+            <span>Celkem</span>
+            <span class="amount tabular" id="summary-total">0 Kč</span>
+          </div>
+          <button class="btn-primary" type="button" id="submit-order">Odeslat objednávku</button>
+          <p class="submit-status" id="submit-status-desktop"></p>
+          <p class="summary-note">Do {{ cutoff_time }} lze objednávku kdykoli upravit.</p>
+        </aside>
+      </div>
+    </div>
+
+    <div class="mobile-actionbar">
+      <div class="mob-total-block">
+        <div class="mob-total-label">Celkem</div>
+        <div class="mob-total-amount tabular" id="summary-total-mobile">0 Kč</div>
+      </div>
+      <button class="btn-primary" type="button" id="submit-order-mobile">Odeslat</button>
+    </div>
+  </div>
+
+  <div class="screen" id="view-dashboard">
+    <div class="dash-shell">
+      <div class="dash-head">
+        <h2>Přehled objednávek</h2>
+        <span class="week-range" id="dash-week-range"></span>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-tile">
+          <div class="stat-label">Tento týden · vy</div>
+          <div class="stat-value tabular" id="stat-week-mine">–</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Tento týden · všichni</div>
+          <div class="stat-value tabular" id="stat-week-all">–</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Tento měsíc · vy</div>
+          <div class="stat-value tabular" id="stat-month-mine">–</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Tento měsíc · všichni</div>
+          <div class="stat-value tabular" id="stat-month-all">–</div>
+        </div>
+      </div>
+
+      <div class="dash-table-wrap">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th>Uživatel</th>
+              <th>Dnes objednáno</th>
+              <th class="num">Dnes</th>
+              <th class="num">Tento týden</th>
+              <th class="num">Tento měsíc</th>
+            </tr>
+          </thead>
+          <tbody id="dash-body"><!-- rows injected by JS --></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">Součet (dnes)</td>
+              <td class="num tabular" id="dash-foot-day">0 Kč</td>
+              <td class="num tabular" id="dash-foot-week">0 Kč</td>
+              <td class="num tabular" id="dash-foot-month">0 Kč</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MENU = {{ menu_by_day | tojson }};
+    const DAYS = {{ day_labels | tojson }};
+    const TODAY = {{ today_label | tojson }};
+    const TODAY_ISO = {{ today_iso | tojson }};
+    const USERNAME = {{ user.username | tojson }};
+    const ORDERING_OPEN = {{ ordering_open | tojson }};
+
+    let selectedDay = TODAY || DAYS[0];
+    const cart = {}; // item_name -> {price, qty, note}
+    {% for name, entry in existing_orders.items() %}
+      cart[{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }} };
+    {% endfor %}
+
+    function fmt(n) { return n.toLocaleString("cs-CZ") + " Kč"; }
+    function initials(name) { return name.slice(0, 2).toUpperCase(); }
+
+    document.getElementById("user-avatar").textContent = initials(USERNAME);
+
+    function renderDays() {
+      const row = document.getElementById("day-row");
+      row.innerHTML = "";
+      DAYS.forEach(day => {
+        const btn = document.createElement("button");
+        btn.className = "day-pill" + (day === TODAY ? " is-today" : "");
+        btn.type = "button";
+        if (day === selectedDay) btn.setAttribute("aria-current", "true");
+        btn.innerHTML = `<div class="d">${day.slice(0,2).toUpperCase()}</div><div class="n">${day}</div>`;
+        btn.addEventListener("click", () => { selectedDay = day; renderDays(); renderMenu(); });
+        row.appendChild(btn);
+      });
+    }
+
+    function renderMenu() {
+      const list = document.getElementById("menu-list");
+      list.innerHTML = "";
+      const items = MENU[selectedDay] || [];
+      const isOrderable = ORDERING_OPEN && selectedDay === TODAY;
+      const byCat = {};
+      items.forEach(it => { (byCat[it.cat] = byCat[it.cat] || []).push(it); });
+
+      if (items.length === 0) {
+        list.innerHTML = '<p class="summary-empty">Pro tento den zatím není menu k dispozici.</p>';
+        return;
+      }
+
+      Object.keys(byCat).forEach(cat => {
+        const block = document.createElement("div");
+        block.className = "category-block";
+        const title = document.createElement("div");
+        title.className = "category-title";
+        title.textContent = cat;
+        block.appendChild(title);
+
+        byCat[cat].forEach(it => {
+          const card = document.createElement("div");
+          card.className = "item-card" + (isOrderable ? "" : " is-readonly");
+
+          const itemRow = document.createElement("div");
+          itemRow.className = "item-row";
+
+          const main = document.createElement("div");
+          main.className = "item-main";
+          main.innerHTML = `<span class="item-name">${it.name}</span><span class="item-price tabular">${it.price} Kč</span>` +
+            (it.desc ? `<div class="item-desc">${it.desc}</div>` : "");
+          itemRow.appendChild(main);
+
+          const qty = (isOrderable && cart[it.name]) ? cart[it.name].qty : 0;
+
+          if (isOrderable) {
+            const stepper = document.createElement("div");
+            stepper.className = "stepper";
+            stepper.innerHTML = `<button type="button" data-action="dec">−</button><span class="qty tabular">${qty}</span><button type="button" data-action="inc">+</button>`;
+            stepper.querySelector('[data-action="inc"]').addEventListener("click", () => changeQty(it, 1));
+            stepper.querySelector('[data-action="dec"]').addEventListener("click", () => changeQty(it, -1));
+            itemRow.appendChild(stepper);
+          }
+
+          card.appendChild(itemRow);
+
+          if (isOrderable) {
+            const noteRow = document.createElement("div");
+            noteRow.className = "note-row";
+            const noteValue = cart[it.name]?.note || "";
+            noteRow.innerHTML = `<input type="text" class="note-input" placeholder="Poznámka (nepovinné) – např. bez cibule" value="${noteValue.replace(/"/g, "&quot;")}" />`;
+            noteRow.querySelector(".note-input").addEventListener("input", (e) => {
+              if (cart[it.name]) { cart[it.name].note = e.target.value; renderSummary(); }
+            });
+            card.appendChild(noteRow);
+          }
+
+          if (qty > 0) card.classList.add("is-selected");
+          block.appendChild(card);
+        });
+        list.appendChild(block);
+      });
+    }
+
+    function changeQty(item, delta) {
+      const current = cart[item.name]?.qty || 0;
+      const next = Math.max(0, current + delta);
+      const existingNote = cart[item.name]?.note || "";
+      if (next === 0) delete cart[item.name];
+      else cart[item.name] = { price: item.price, qty: next, note: existingNote };
+      renderMenu();
+      renderSummary();
+    }
+
+    function renderSummary() {
+      const body = document.getElementById("summary-body");
+      const entries = Object.values(cart);
+      if (entries.length === 0) {
+        body.innerHTML = '<p class="summary-empty">Zatím nic nevybráno.</p>';
+      } else {
+        body.innerHTML = Object.entries(cart).map(([name, e]) => `
+          <div class="summary-line">
+            <div>
+              <span class="qty-tag">${e.qty}×</span>${name}
+              ${e.note ? `<div class="summary-note-text">„${e.note}“</div>` : ""}
+            </div>
+            <span class="price tabular">${e.price * e.qty} Kč</span>
+          </div>`).join("");
+      }
+      const total = entries.reduce((sum, e) => sum + e.price * e.qty, 0);
+      document.getElementById("summary-total").textContent = fmt(total);
+      document.getElementById("summary-total-mobile").textContent = fmt(total);
+    }
+
+    async function submitOrder() {
+      const items = Object.entries(cart).map(([name, e]) => ({ item_name: name, quantity: e.qty, note: e.note || "" }));
+      const statusEl = document.getElementById("submit-status-desktop");
+      if (items.length === 0) {
+        statusEl.textContent = "Vyberte alespoň jednu položku.";
+        statusEl.className = "submit-status error";
+        return;
+      }
+      const resp = await fetch("/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (resp.ok) {
+        statusEl.textContent = "Objednávka uložena.";
+        statusEl.className = "submit-status ok";
+      } else {
+        const body = await resp.json().catch(() => ({}));
+        statusEl.textContent = body.detail || "Odeslání se nezdařilo.";
+        statusEl.className = "submit-status error";
+      }
+    }
+
+    const submitDesktop = document.getElementById("submit-order");
+    const submitMobile = document.getElementById("submit-order-mobile");
+    submitDesktop.addEventListener("click", submitOrder);
+    submitMobile.addEventListener("click", submitOrder);
+    if (!ORDERING_OPEN) {
+      submitDesktop.disabled = true;
+      submitMobile.disabled = true;
+      submitDesktop.style.opacity = "0.5";
+      document.getElementById("submit-status-desktop").textContent = "Objednávky jsou dnes uzavřené.";
+    }
+
+    // ---- Dashboard (fetched lazily on first visit to the tab) ----
+    let dashboardLoaded = false;
+
+    function itemsLabel(n) {
+      if (n === 1) return "1 položka";
+      if (n >= 2 && n <= 4) return `${n} položky`;
+      return `${n} položek`;
+    }
+
+    async function loadDashboard() {
+      if (dashboardLoaded) return;
+      const resp = await fetch("/dashboard");
+      if (!resp.ok) return;
+      const data = await resp.json();
+      renderDashboard(data);
+      dashboardLoaded = true;
+    }
+
+    function renderDashboard(data) {
+      const mine = data.rows.find(r => r.user === USERNAME);
+      document.getElementById("stat-week-mine").innerHTML = fmt(mine ? mine.week_total_czk : 0);
+      document.getElementById("stat-month-mine").innerHTML = fmt(mine ? mine.month_total_czk : 0);
+      document.getElementById("stat-week-all").innerHTML = fmt(data.week_aggregate_czk);
+      document.getElementById("stat-month-all").innerHTML = fmt(data.month_aggregate_czk);
+
+      const todayRows = data.rows.filter(r => r.order_date === TODAY_ISO);
+      const body = document.getElementById("dash-body");
+      if (todayRows.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" class="items-note">Dnes zatím nikdo neobjednal.</td></tr>';
+      } else {
+        body.innerHTML = todayRows.map(r => `
+          <tr>
+            <td><div class="who"><div class="avatar">${initials(r.user)}</div>${r.user}</div></td>
+            <td class="items-note">${itemsLabel(r.items_ordered)}</td>
+            <td class="num tabular">${fmt(r.daily_total_czk)}</td>
+            <td class="num tabular">${fmt(r.week_total_czk)}</td>
+            <td class="num tabular">${fmt(r.month_total_czk)}</td>
+          </tr>`).join("");
+      }
+      document.getElementById("dash-foot-day").textContent = fmt(todayRows.reduce((s, r) => s + r.daily_total_czk, 0));
+      document.getElementById("dash-foot-week").textContent = fmt(data.week_aggregate_czk);
+      document.getElementById("dash-foot-month").textContent = fmt(data.month_aggregate_czk);
+      document.getElementById("dash-week-range").textContent = TODAY_ISO;
+    }
+
+    document.querySelectorAll("[data-goto]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.goto;
+        document.getElementById("view-order").classList.toggle("active", target === "order");
+        document.getElementById("view-dashboard").classList.toggle("active", target === "dashboard");
+        document.querySelectorAll("[data-goto]").forEach(b => b.toggleAttribute("aria-current", b.dataset.goto === target));
+        if (target === "dashboard") loadDashboard();
+      });
+    });
+
+    document.getElementById("logout-btn").addEventListener("click", async () => {
+      await fetch("/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+
+    renderDays();
+    renderMenu();
+    renderSummary();
+  </script>
+</body>
+</html>

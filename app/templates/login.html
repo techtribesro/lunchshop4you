@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oběd — přihlášení</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-card">
+      <div class="login-mark">
+        <span class="glyph">Ob</span><span class="word">ěd</span>
+      </div>
+      <p class="login-sub">týdenní menu &amp; objednávky</p>
+
+      <form id="login-form">
+        <div class="field">
+          <label for="u">Uživatelské jméno</label>
+          <input id="u" name="username" type="text" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="p">Heslo</label>
+          <input id="p" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <p id="login-error" style="display:none;color:var(--critical);font-size:13px;margin:0 0 10px;"></p>
+        <button class="btn-primary" type="submit">Přihlásit se</button>
+      </form>
+      <p class="login-foot">Zapomenuté heslo? Napište adminovi.</p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById("login-error");
+      errorEl.style.display = "none";
+
+      const form = e.target;
+      const username = form.username.value;
+      const password = form.password.value;
+
+      const resp = await fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (resp.ok) {
+        window.location.href = "/orders";
+      } else {
+        const body = await resp.json().catch(() => ({}));
+        errorEl.textContent = body.detail || "Přihlášení se nezdařilo.";
+        errorEl.style.display = "block";
+      }
+    });
+  </script>
+</body>
+</html>
