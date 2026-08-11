@@ -1,188 +1,286 @@
 # Lunch Ordering Web App – Requirements
 
-**Date:** August 11, 2026  
-**Timezone:** CET/CEST (Prague)  
-**Users:** 6–7 concurrent  
-**Stack:** Python backend (Flask/FastAPI), Fly.io (free tier), Google Sheets (data store), internal scheduler
+**Last updated:** August 12, 2026
+**Timezone:** CET/CEST (Prague)
+**Users:** 6–7, one office
+**Stack:** Python 3.11 / FastAPI, server-rendered Jinja2 templates + vanilla JS, SQLite, Fly.io
+
+This document describes the app as it actually runs in production. It supersedes the
+original spec (kept in git history) — the two biggest deviations are noted inline where
+they matter: **SQLite instead of Google Sheets as the datastore**, and **session cookies
+instead of JWT**.
 
 ---
 
-## Functional Requirements
+## 1. Menu Ingestion
 
-### 1. Menu Ingestion
+- A `BackgroundScheduler` (APScheduler) job polls Gmail via IMAP every **Sunday at 18:00
+  Prague time**, scanning the most recent messages in the inbox (optionally filtered by
+  `MENU_EMAIL_SENDER`) for the weekly menu.
+- If the email has a **PDF attachment**, the whole PDF is sent to **Gemini**
+  (`gemini-flash-latest`, raw REST call, no SDK) with a structured JSON response schema.
+  Gemini returns, per item: day, category, name, description, price (CZK), and an
+  **estimated calorie count** — extraction and calorie estimation happen in the **same
+  API call**, not two, to stay inside Gemini's free-tier quota (see §6).
+- If there's no PDF (rare, plain-text fallback), the body is parsed with a regex-based
+  parser (`app/services/menu_parser.py`) that splits on the Czech day headers (PONDĚLÍ,
+  ÚTERÝ, STŘEDA, ČTVRTEK, PÁTEK) and category labels, then calorie counts for that path
+  are estimated with a **second, separate** Gemini call (`calorie_estimator.py`) since
+  there's no PDF call to piggyback on.
+- Categories: Polévka (soup), Hlavní jídlo 1–3 (mains), Vege. jídlo (vegetarian). Not
+  every day has every category.
+- Each new parse **replaces the current week's menu** (delete + bulk insert), keyed by
+  `week_start`.
+- An admin can also trigger a re-parse on demand (`POST /admin/parse-menu`), or wipe the
+  current week's menu without re-fetching (`POST /admin/clear-menu`) to clear a bad parse
+  before retrying.
 
-- System polls Gmail IMAP weekly for menu email from third party
-- Parses email body to extract menu structure by day (Monday–Friday)
-- Extracts: item name/description, price (CZK), day section
-- Ignores allergen codes and category labels
-- Stores menu for 5 days (Mon–Fri) with items grouped by category
-  - Polévka (Soup)
-  - Hlavní jídlo 1–3 (Main 1–3)
-  - Vege. jídlo (Vegetarian)
-- Overwrites previous week's menu on new parse
-- Parsing must handle Czech text, multi-line descriptions, CZK prices
+## 2. Ordering
 
-### 2. Ordering
+- Login required (username + password).
+- The order page shows all five weekdays as day pills; the current day is marked, and an
+  admin-opened "early" day (see below) is marked separately. Each day's menu shows every
+  category, with price and estimated kcal per item.
+- Users pick quantities per item and may attach a **free-text note per item** (e.g. "bez
+  cibule"), up to 255 characters.
+- Submitting **replaces** that user's order for that date in full (delete-then-insert) —
+  latest submission wins, no edit history.
+- **Cutoff:** 11:30 CET/CEST, configurable via `ORDER_CUTOFF_TIME`. The UI shows a
+  live "open / closing soon (≤15 min) / closed" pill. The server independently enforces
+  the same cutoff — the client-side state is UI-only.
+- **Early ordering:** an admin can open ordering for the *next business day* ahead of its
+  own cutoff (`POST /admin/early-ordering/open`), e.g. the evening before. This is scoped
+  to the case where that next business day falls in the already-loaded week — if it would
+  cross into a week whose menu hasn't been parsed yet, opening is rejected. Each user's
+  cart is tracked per-date client-side so today's and an early-opened day's selections
+  don't collide.
+- No weekend ordering.
 
-- Users log in (username + password)
-- View current day's menu (all categories visible)
-- Select multiple items with quantities (qty × item)
-- Submit before 11:30 AM CET daily
-- Edit/resubmit allowed before cutoff (latest submission overwrites previous)
-- System blocks orders after 11:30 AM CET
-- No edit history stored
+## 3. Dashboard
 
-### 3. Dashboard
+- Visible to all logged-in users, recomputed on every request from SQLite (no caching).
+- Per user and aggregate: daily / weekly / monthly spend (CZK) **and** estimated calorie
+  totals (kcal), the latter computed by joining orders back to the menu item they were
+  priced against.
+- Aggregation logic lives in `app/services/dashboard.py` and is shared between the
+  dashboard endpoint and the Google Sheets sync (§5), so both stay consistent.
 
-- Real-time: all users' current week orders (itemized by day/category)
-- Weekly totals: per-user and aggregate spend (CZK)
-- Monthly totals: per-user and aggregate spend (CZK)
-- Visible to all logged-in users
-- Updates immediately on order submit/edit
+## 4. Authentication
 
-### 4. Authentication
+- Username + password login, session identified by a signed cookie backed by a
+  `sessions` table in SQLite (not stateless JWT — see §7 for why).
+- Idle timeout: `SESSION_IDLE_TIMEOUT_HOURS` (default 24h).
+- **Admin account** is provisioned automatically on every app boot from
+  `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars (upserted, password re-hashed each boot) —
+  no manual bootstrap step needed on a fresh deploy.
+- Additional users and admin-toggling are managed from the in-app admin panel
+  (`/admin/users`), not a CLI. `app/cli.py` (`create-user`, `reset-password`,
+  `make-admin`) still exists as a fallback ops tool.
+- An admin cannot revoke their own admin flag via the toggle endpoint (guards against
+  locking everyone out).
 
-- Login required (username + password)
-- Manual password reset only (6–7 users)
-- Session timeout: 24 hours idle
+## 5. Admin Panel
+
+Gated by `is_admin` (`require_admin` dependency, 403 otherwise). Available actions:
+
+- Force a menu re-parse, or clear the current week's menu.
+- Manually trigger the daily order-summary email.
+- View / open / close the early-ordering window for the next business day.
+- List users, create a user (with optional admin flag), reset a password, toggle a
+  user's admin status.
+
+## 6. Calorie Estimation
+
+- Estimated kcal per dish is shown on menu item cards, in the order summary panel (a
+  running total for the current cart), and in weekly/monthly dashboard totals.
+- Sourced from Gemini as part of the PDF-extraction call described in §1 — **not** a
+  separate call — because Gemini's free tier caps at **20 requests/day per project per
+  model**, shared across menu parsing and (rarely) the text-fallback calorie call. A
+  second daily consumer (e.g. Gemini-generated order-summary copy) was deliberately
+  removed for the same reason — see §8.
+- Values are best-effort LLM estimates, not authoritative nutrition data.
+
+## 7. Authentication Architecture Note
+
+The original spec called for stateless JWT cookies. This was changed to a signed cookie
++ server-side `sessions` table because idle-timeout expiry (log the user out after N
+hours of *inactivity*, not N hours after login) isn't something a stateless JWT can do
+cleanly without extra bookkeeping that ends up being a session table anyway.
 
 ---
 
 ## Non-Functional Requirements
 
-- **Users:** 6–7 concurrent
-- **Hosting:** Free tier
-- **Timezone:** CET/CEST (Prague local time)
-- **Data Retention:** Current month + previous month
-- **Performance:** Sub-second page loads acceptable for this scale
-- **Uptime:** Best-effort (free tier SLA)
+- **Users:** 6–7 concurrent.
+- **Hosting:** Fly.io, region `fra`, shared-cpu-1x, **256 MB RAM** — confirmed
+  sufficient after removing the pdfplumber-based PDF fallback (see §9).
+- **Timezone:** Europe/Prague for all scheduling and cutoff logic.
+- **Uptime:** best-effort; single always-on machine, no HA.
 
 ---
 
-## Data Storage – Google Sheets
+## Data Storage
 
-All data lives in a single Google Sheets document with tabs (sheets):
+### SQLite — operational datastore (source of truth)
 
-### Sheet: `users`
-| username | password_hash | created_at |
-|----------|---------------|-----------|
-| yakob | hash_xxx | 2026-08-11 |
-| user2 | hash_yyy | 2026-08-11 |
+A single SQLite file on a persistent Fly volume (`lunchshop_data`, mounted at `/data`,
+`DATABASE_PATH=/data/lunchshop.db`). Tables (see `app/models.py`):
 
-### Sheet: `menu`
-| week_start | day | category | item_name | description | price_czk | parsed_at |
-|------------|-----|----------|-----------|-------------|-----------|-----------|
-| 2026-08-11 | Monday | Polévka | Chicken soup | ... | 25 | 2026-08-11T10:00:00Z |
-| 2026-08-11 | Monday | Hlavní jídlo 1 | Pasta alla sicilia | ... | 185 | 2026-08-11T10:00:00Z |
+| Table | Purpose |
+|---|---|
+| `users` | username, password hash, `is_admin`, created_at |
+| `sessions` | session token → user, created_at, last_seen_at (idle-timeout tracking) |
+| `menu` | week_start, day, category, item_name, description, price_czk, `calories_kcal`, parsed_at — unique on (week_start, day, category, item_name) |
+| `orders` | user_id, order_date, week_start, item_name, quantity, unit_price_czk, `note`, submitted_at — unique on (user_id, order_date, item_name) |
+| `early_ordering_windows` | order_date (unique), opened_by, opened_at |
 
-### Sheet: `orders`
-| user_id | order_date | item_name | quantity | unit_price_czk | submitted_at | week_start |
-|---------|-----------|-----------|----------|----------------|--------------|-----------|
-| yakob | 2026-08-11 | Chicken soup | 1 | 25 | 2026-08-11T11:00:00Z | 2026-08-11 |
-| yakob | 2026-08-11 | Pasta alla sicilia | 1 | 185 | 2026-08-11T11:00:00Z | 2026-08-11 |
-| user2 | 2026-08-11 | Chicken soup | 2 | 25 | 2026-08-11T11:15:00Z | 2026-08-11 |
+Schema changes are applied additively at startup: `init_db()` runs
+`Base.metadata.create_all()` and then a small routine that diffs each model's columns
+against the live table and issues `ALTER TABLE ... ADD COLUMN` for anything missing —
+there's no Alembic; this only ever adds nullable/defaulted columns, never drops or
+alters existing ones.
 
-### Sheet: `dashboard` (read-only, auto-computed)
-| user | order_date | items_ordered | daily_total_czk | week_total_czk | month_total_czk |
-|------|-----------|--------------|-----------------|----------------|-----------------|
-| yakob | 2026-08-11 | 2 items | 210 | 210 | 210 |
-| user2 | 2026-08-11 | 1 item | 50 | 50 | 50 |
+### Google Sheets — reporting mirror (not the datastore)
 
-**Access:**
-- Backend uses Google Sheets API v4 (read/write authenticated via service account)
-- Dashboard sheet auto-computed via SUMIF formulas or backend aggregation
-- All data queryable directly from sheets for auditing/manual inspection
+`app/services/sheets_sync.py` pushes one-way snapshots of `menu`, `orders`, and a
+computed `dashboard` tab to a Google Sheet after every menu parse, using the shared
+`compute_dashboard()` logic from §3. Each sync clears and rewrites all three tabs — no
+stale rows, no incremental diffing. The app **never reads back** from Sheets; it exists
+purely so the data is human-browsable/auditable outside the app.
+
+- Auth: a Google Cloud service account
+  (`lunchshop4you@gen-lang-client-0404501894.iam.gserviceaccount.com`), granted Editor
+  access to the target spreadsheet.
+- Credentials are supplied either as a local JSON key file path
+  (`GOOGLE_SERVICE_ACCOUNT_JSON`, for local dev) or as inline JSON in the same env var
+  (for Fly.io, which only supports env-var secrets, not file mounts).
+- If `GOOGLE_SHEETS_SPREADSHEET_ID` or credentials aren't configured, sync is skipped
+  with a warning log — the app functions fully without it.
 
 ---
 
-## Email Polling & Menu Parse
+## Email
 
-- **Frequency:** Once per week (day/time TBD)
-- **Method:** Gmail IMAP polling from bot/service account
-- **Trigger:** Internal Fly.io scheduler (Python `APScheduler` or similar)
-- **Parsing:** Extract sections by day header (PONDĚLÍ, ÚTERÝ, etc.), then categories, then items
-- **Output:** Upsert to `menu` sheet (replace previous week's data)
-- **Error Handling:** Log parse errors; write failure status to sheets or stdout for Fly.io logs
+### Inbound: weekly menu (Gmail IMAP)
 
-## Google Sheets Implementation Notes
+- `GMAIL_IMAP_HOST` / `GMAIL_IMAP_USER` / `GMAIL_IMAP_PASSWORD` (Gmail app password),
+  optionally scoped to `MENU_EMAIL_SENDER`.
+- Scans the most recent messages in the inbox (newest first) for a PDF attachment or
+  plain-text body; see §1 for parsing.
+- RFC2047-encoded attachment filenames are decoded before the `.pdf` extension check
+  (vendor emails send encoded-word filenames).
 
-- **Service Account:** Create one in Google Cloud, grant access to Sheets document, download JSON key
-- **Caching:** Cache menu in-memory after parse (reduces API calls during the week)
-- **Concurrency:** Append-only for orders to avoid row conflicts. Menu is bulk-replaced weekly.
-- **Manual fallback:** Users can view/edit sheets directly if app is down (sheets remain accessible)
-- **Rate limiting:** Batch API calls where possible (e.g., batch append orders at end of day vs. per-order)
+### Outbound: daily order summary (Gmail SMTP)
+
+- Sent Mon–Fri shortly after cutoff, `ORDER_SUMMARY_SEND_TIME` (default 11:35, a few
+  minutes after the 11:30 cutoff to let last-second edits settle).
+- Recipient: `ORDER_SUMMARY_RECIPIENT_EMAIL` / `ORDER_SUMMARY_RECIPIENT_NAME` (the
+  restaurant contact, "Honza"). Sender display name: `ORDER_SUMMARY_SENDER_NAME`.
+- Body is an HTML table (per-person line items, then a per-dish "Souhrn podle jídla"
+  summary) sent via STARTTLS on port 587 — no `.xlsx` attachment, no spreadsheet
+  dependency.
+- **The email copy (greeting/intro/thanks) is a static, hardcoded template**
+  (`app/services/order_summary.py::EMAIL_COPY`), not Gemini-generated. This was a
+  deliberate call: this email fires automatically every weekday, and spending a Gemini
+  call on it every single day doesn't fit the 20-req/day free-tier budget alongside menu
+  parsing. Not grammatically perfect Czech vocative for an arbitrary name, but the
+  recipient name is fixed per deployment, so it only has to read right once.
+- Also triggerable on demand from the admin panel.
 
 ---
 
 ## API/Endpoints
 
-### Authentication
-- `POST /login` – username + password → session token
-- `POST /logout` – destroy session
+### Pages (server-rendered)
+- `GET /login` — login form, redirects to `/orders` if already authenticated
+- `GET /orders` — main app page (menu, cart, dashboard, admin panel if `is_admin`)
+
+### Auth
+- `POST /login` — username + password → session cookie
+- `POST /logout` — destroy session
 
 ### Menu
-- `GET /menu/today` – current day's menu with categories
-- `GET /menu/week` – full week menu
+- `GET /menu/today` — current day's menu
+- `GET /menu/week` — full week menu
 
 ### Orders
-- `POST /orders` – submit/update order for today (before 11:30 AM CET)
-- `GET /orders/my-week` – user's current week orders
-- `GET /dashboard` – all users' week/month totals
+- `POST /orders` — submit/replace an order for a given date (today, or an
+  early-opened date)
+- `GET /orders/my-week` — caller's current-week orders
 
-### Admin (optional)
-- `POST /admin/parse-menu` – manual trigger for email parse
+### Dashboard
+- `GET /dashboard` — all users' daily/weekly/monthly spend + kcal totals
+
+### Admin (all require `is_admin`)
+- `POST /admin/parse-menu` — force a menu re-parse
+- `POST /admin/clear-menu` — wipe current week's menu without re-fetching
+- `POST /admin/send-order-summary` — send today's summary email on demand
+- `GET /admin/early-ordering` — status for the next business day
+- `POST /admin/early-ordering/open` / `close`
+- `GET /admin/users` — list users
+- `POST /admin/users` — create a user
+- `POST /admin/users/{username}/reset-password`
+- `POST /admin/users/{username}/toggle-admin`
+
+### Ops
+- `GET /health`
 
 ---
 
 ## Constraints & Decisions
 
-- **11:30 AM CET:** Hard cutoff. Orders submitted after are rejected.
-- **No payment processing:** Prices for tracking only.
-- **No email notifications:** Dashboard is source of truth.
-- **Plain text parsing:** No HTML email structure assumed.
-- **Single timezone:** All users in CET/CEST.
-- **Google Sheets as DB:** No complex queries, but easy to audit and manual backup via Google Drive.
-- **Rate limits:** Google Sheets API allows ~500 requests/100 seconds. Sufficient for this scale.
-- **Data consistency:** Append-only for orders (no delete, only edit by resubmit). Menu overwrites weekly.
+- **11:30 CET/CEST hard cutoff**, enforced server-side; UI cutoff pill is advisory only.
+- **No payment processing** — prices are for tracking/billing the office, not charged
+  in-app.
+- **Plain-text/PDF email parsing**, no assumption of consistent HTML structure from the
+  vendor.
+- **Single timezone** (Europe/Prague) for all users and scheduling.
+- **SQLite as source of truth, Sheets as a mirror** — see §5 above; this is the biggest
+  deviation from the original spec, which called for Sheets as the primary datastore.
+  SQLite was chosen because 6–7 users generate negligible write volume, and a real
+  relational store makes the cutoff/early-ordering/kcal-aggregation logic far simpler
+  than driving it off the Sheets API.
+- **Delete-and-reinsert semantics**: both menu refresh and order submission
+  replace-in-full rather than diff/patch — simpler, and correct at this scale.
 
 ---
 
 ## Infrastructure
 
-### Hosting: Fly.io (free tier)
-- Python app runs in persistent container (always-on)
-- Includes scheduler for cron jobs (weekly menu parse)
-- 3 shared CPU, 256 MB RAM – sufficient for 6–7 users
-- Storage: none needed (stateless, data in Sheets)
+### Hosting: Fly.io
+- App `lunchshop4you`, region `fra`, `shared-cpu-1x`, **256 MB RAM**.
+- Persistent volume `lunchshop_data` mounted at `/data` for the SQLite file.
+- `min_machines_running = 1`, `auto_stop_machines = false` — always-on, no cold starts.
+- Secrets requiring inline JSON (`GOOGLE_SERVICE_ACCOUNT_JSON`) or other credentials
+  (`GEMINI_API_KEY`, `GMAIL_IMAP_PASSWORD`, `SESSION_SECRET`, `ADMIN_PASSWORD`, etc.) are
+  set via `fly secrets set`, not `fly.toml` — Fly secrets are env-var-only, no file
+  mounts, so anything expected as a file path locally is passed as inline content in
+  production and handled accordingly by the reading code (see `sheets_sync.py`).
 
-### Data: Google Sheets
-- Authenticate via service account JSON key
-- Read/write via `google-sheets-api` Python library
-- Cost: free (part of Google Workspace or personal account)
-- Audit trail: all changes visible in Sheets version history
-
-### Email: Gmail IMAP
-- Service account or bot account with read access to inbox
-- Weekly poll: extract menu, parse, upsert to `menu` sheet
-- No additional cost
-
-### Session/Auth
-- JWT tokens stored in cookies (stateless)
-- Token validation on each request
-- Refresh tokens optional (users can re-login after 24h)
+### Scheduler
+- In-process `APScheduler` `BackgroundScheduler` (no external cron), started in the
+  FastAPI lifespan and shut down on app exit.
+- Sunday 18:00 Prague: weekly menu poll + Sheets sync.
+- Mon–Fri at `ORDER_SUMMARY_SEND_TIME`: daily order summary email.
 
 ### Monitoring/Logging
-- Fly.io built-in logs (free)
-- stdout from Python app
-- Email alerts on parse failure (optional, via third-party service)
+- Fly.io built-in logs (`flyctl logs`), stdout from the app. No external alerting.
 
 ---
 
-## Revision Note (2026-08-11)
+## 9. History / Notable Fixes
 
-The sections above are the original spec as provided. After discussion, the storage
-architecture was revised — see design notes in project memory / commit history:
-**SQLite is the operational datastore** (users, sessions, menu, orders); **Google
-Sheets is a reporting/audit mirror**, synced asynchronously rather than queried live.
-This replaces the "Google Sheets as DB" and "stateless JWT" sections above. Endpoints,
-functional requirements, and the CZK/cutoff/retention rules are unchanged.
+Kept briefly for context on why the app looks the way it does — not requirements, just
+provenance for anyone reading the code later:
+
+- **pdfplumber removed entirely.** It was the fallback PDF-text-extraction path used
+  before the Gemini-based extractor existed, and its memory footprint (PDF rendering +
+  concurrent Gemini calls) caused a production OOM kill on the 256 MB machine. Since
+  Gemini extraction has been 100% reliable, the fallback was dropped rather than kept
+  as dead weight — image size dropped ~92 MB → 75 MB, and 256 MB RAM was confirmed
+  sufficient again afterward.
+- **Gemini free-tier quota (20 req/day)** shapes several decisions in this document:
+  merging calorie estimation into the PDF-extraction call (§6), and hardcoding the
+  order-summary email copy instead of generating it (§ Email).
+- **bcrypt via the raw `bcrypt` package**, not `passlib` — `passlib` is incompatible
+  with `bcrypt>=4.1`.
