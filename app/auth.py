@@ -74,3 +74,28 @@ def get_current_user(
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not logged in")
     return user
+
+
+def require_admin(
+    user: User = Depends(get_current_user),
+) -> User:
+    if not user.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin access required")
+    return user
+
+
+def sync_env_admin(db: Session) -> None:
+    """Ensures ADMIN_USERNAME/ADMIN_PASSWORD (if set) always exists as an
+    admin, re-synced on every startup -- so the admin account is entirely
+    env-config-driven, no CLI bootstrap step required."""
+    if not settings.admin_username or not settings.admin_password:
+        return
+
+    user = db.query(User).filter(User.username == settings.admin_username).first()
+    if user is None:
+        user = User(username=settings.admin_username, password_hash=hash_password(settings.admin_password), is_admin=True)
+        db.add(user)
+    else:
+        user.password_hash = hash_password(settings.admin_password)
+        user.is_admin = True
+    db.commit()

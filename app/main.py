@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.db import init_db
+from app.auth import sync_env_admin
+from app.db import SessionLocal, init_db
 from app.routers import admin, auth, dashboard, menu, orders, pages
 from app.services.scheduler import start_scheduler
 
@@ -12,6 +13,11 @@ from app.services.scheduler import start_scheduler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    db = SessionLocal()
+    try:
+        sync_env_admin(db)
+    finally:
+        db.close()
     scheduler = start_scheduler()
     yield
     scheduler.shutdown(wait=False)

@@ -11,6 +11,22 @@
     .submit-status.error { color: var(--critical); }
     .item-card.is-readonly .item-desc { white-space: normal; overflow: visible; text-overflow: clip; }
     .item-card.is-readonly { opacity: 0.85; }
+
+    .admin-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 24px; }
+    .admin-actions .btn-primary { width: auto; padding: 10px 18px; }
+    .admin-actions .submit-status { margin: 0; text-align: left; }
+    .btn-danger { background: var(--critical); }
+    .btn-danger:hover { background: var(--critical); opacity: 0.85; }
+    .admin-section-title { margin: 28px 0 12px; }
+    .admin-form { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+    .admin-form .field { margin-bottom: 0; min-width: 180px; }
+    .admin-form .btn-primary { width: auto; padding: 10px 20px; }
+    .admin-checkbox { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink-muted); padding-bottom: 10px; }
+    .role-badge {
+      display: inline-block; padding: 2px 9px; border-radius: 999px;
+      font-size: 11.5px; font-weight: 600; background: var(--line-soft); color: var(--ink-muted);
+    }
+    .role-badge.admin { background: var(--accent-tint); color: var(--accent-strong); }
   </style>
 </head>
 <body>
@@ -19,6 +35,7 @@
     <nav class="view-nav">
       <button type="button" data-goto="order" aria-current="true">Objednávka</button>
       <button type="button" data-goto="dashboard">Přehled</button>
+      {% if user.is_admin %}<button type="button" data-goto="admin">Admin</button>{% endif %}
     </nav>
     <div class="topbar-spacer"></div>
     <div class="user-chip">
@@ -84,18 +101,22 @@
         <div class="stat-tile">
           <div class="stat-label">Tento týden · vy</div>
           <div class="stat-value tabular" id="stat-week-mine">–</div>
+          <div class="stat-kcal tabular" id="stat-week-mine-kcal"></div>
         </div>
         <div class="stat-tile">
           <div class="stat-label">Tento týden · všichni</div>
           <div class="stat-value tabular" id="stat-week-all">–</div>
+          <div class="stat-kcal tabular" id="stat-week-all-kcal"></div>
         </div>
         <div class="stat-tile">
           <div class="stat-label">Tento měsíc · vy</div>
           <div class="stat-value tabular" id="stat-month-mine">–</div>
+          <div class="stat-kcal tabular" id="stat-month-mine-kcal"></div>
         </div>
         <div class="stat-tile">
           <div class="stat-label">Tento měsíc · všichni</div>
           <div class="stat-value tabular" id="stat-month-all">–</div>
+          <div class="stat-kcal tabular" id="stat-month-all-kcal"></div>
         </div>
       </div>
 
@@ -108,6 +129,7 @@
               <th class="num">Dnes</th>
               <th class="num">Tento týden</th>
               <th class="num">Tento měsíc</th>
+              <th class="num">Kalorie (dnes)</th>
             </tr>
           </thead>
           <tbody id="dash-body"><!-- rows injected by JS --></tbody>
@@ -117,6 +139,7 @@
               <td class="num tabular" id="dash-foot-day">0 Kč</td>
               <td class="num tabular" id="dash-foot-week">0 Kč</td>
               <td class="num tabular" id="dash-foot-month">0 Kč</td>
+              <td class="num tabular" id="dash-foot-kcal">0 kcal</td>
             </tr>
           </tfoot>
         </table>
@@ -124,19 +147,106 @@
     </div>
   </div>
 
+  {% if user.is_admin %}
+  <div class="screen" id="view-admin">
+    <div class="dash-shell">
+      <div class="dash-head">
+        <h2>Administrace</h2>
+      </div>
+
+      <div class="admin-actions">
+        <button class="btn-primary" type="button" id="admin-parse-menu">Načíst menu z e-mailu</button>
+        <button class="btn-primary btn-danger" type="button" id="admin-clear-menu">Vynutit smazání menu (tento týden)</button>
+        <button class="btn-primary" type="button" id="admin-send-summary">Odeslat dnešní objednávku</button>
+        <p class="submit-status" id="admin-action-status"></p>
+      </div>
+
+      <h3 class="summary-title admin-section-title">Předobjednávka na další den</h3>
+      <div class="admin-actions">
+        <span id="early-ordering-status" style="font-size:13.5px;color:var(--ink-muted);"></span>
+        <button class="btn-primary" type="button" id="admin-early-toggle"></button>
+        <p class="submit-status" id="early-ordering-action-status"></p>
+      </div>
+
+      <h3 class="summary-title admin-section-title">Uživatelé</h3>
+      <div class="dash-table-wrap">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th>Uživatel</th>
+              <th>Role</th>
+              <th>Vytvořen</th>
+              <th class="num">Akce</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-body"><!-- rows injected by JS --></tbody>
+        </table>
+      </div>
+
+      <h3 class="summary-title admin-section-title">Nový uživatel</h3>
+      <form id="admin-create-user-form" class="admin-form">
+        <div class="field">
+          <label for="new-username">Uživatelské jméno</label>
+          <input id="new-username" name="username" type="text" required />
+        </div>
+        <div class="field">
+          <label for="new-password">Heslo</label>
+          <input id="new-password" name="password" type="text" required />
+        </div>
+        <label class="admin-checkbox">
+          <input type="checkbox" name="is_admin" /> Administrátor
+        </label>
+        <button class="btn-primary" type="submit">Vytvořit uživatele</button>
+      </form>
+      <p class="submit-status" id="admin-create-status"></p>
+    </div>
+  </div>
+  {% endif %}
+
   <script>
     const MENU = {{ menu_by_day | tojson }};
     const DAYS = {{ day_labels | tojson }};
     const TODAY = {{ today_label | tojson }};
     const TODAY_ISO = {{ today_iso | tojson }};
+    const EARLY_LABEL = {{ early_label | tojson }};
+    const EARLY_ISO = {{ early_iso | tojson }};
     const USERNAME = {{ user.username | tojson }};
     const ORDERING_OPEN = {{ ordering_open | tojson }};
 
+    // Which day labels have a cart concept at all (viewable), keyed to
+    // their ISO date. TODAY is always present (read-only after cutoff);
+    // EARLY_LABEL only when an admin has opened it.
+    const DATE_BY_LABEL = {};
+    if (TODAY) DATE_BY_LABEL[TODAY] = TODAY_ISO;
+    if (EARLY_LABEL) DATE_BY_LABEL[EARLY_LABEL] = EARLY_ISO;
+
     let selectedDay = TODAY || DAYS[0];
-    const cart = {}; // item_name -> {price, qty, note}
-    {% for name, entry in existing_orders.items() %}
-      cart[{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }} };
-    {% endfor %}
+
+    const carts = {}; // dateIso -> { item_name: {price, qty, note} }
+    if (TODAY_ISO) {
+      carts[TODAY_ISO] = {};
+      {% for name, entry in existing_orders.items() %}
+        carts[TODAY_ISO][{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }} };
+      {% endfor %}
+    }
+    if (EARLY_ISO) {
+      carts[EARLY_ISO] = {};
+      {% for name, entry in early_existing_orders.items() %}
+        carts[EARLY_ISO][{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }} };
+      {% endfor %}
+    }
+
+    function currentDateIso() { return DATE_BY_LABEL[selectedDay]; }
+    function currentCart() {
+      const iso = currentDateIso();
+      if (!iso) return null;
+      return carts[iso] || (carts[iso] = {});
+    }
+    function isEditable(day) {
+      if (day === TODAY) return ORDERING_OPEN;
+      if (day === EARLY_LABEL) return true;
+      return false;
+    }
 
     function fmt(n) { return n.toLocaleString("cs-CZ") + " Kč"; }
     function initials(name) { return name.slice(0, 2).toUpperCase(); }
@@ -148,11 +258,12 @@
       row.innerHTML = "";
       DAYS.forEach(day => {
         const btn = document.createElement("button");
-        btn.className = "day-pill" + (day === TODAY ? " is-today" : "");
+        btn.className = "day-pill" + (day === TODAY ? " is-today" : "") + (day === EARLY_LABEL ? " is-early" : "");
         btn.type = "button";
+        if (day === EARLY_LABEL) btn.title = "Předobjednávka otevřena";
         if (day === selectedDay) btn.setAttribute("aria-current", "true");
         btn.innerHTML = `<div class="d">${day.slice(0,2).toUpperCase()}</div><div class="n">${day}</div>`;
-        btn.addEventListener("click", () => { selectedDay = day; renderDays(); renderMenu(); });
+        btn.addEventListener("click", () => { selectedDay = day; renderDays(); renderMenu(); renderSummary(); updateSubmitState(); });
         row.appendChild(btn);
       });
     }
@@ -161,7 +272,8 @@
       const list = document.getElementById("menu-list");
       list.innerHTML = "";
       const items = MENU[selectedDay] || [];
-      const isOrderable = ORDERING_OPEN && selectedDay === TODAY;
+      const editable = isEditable(selectedDay);
+      const cart = currentCart();
       const byCat = {};
       items.forEach(it => { (byCat[it.cat] = byCat[it.cat] || []).push(it); });
 
@@ -180,7 +292,7 @@
 
         byCat[cat].forEach(it => {
           const card = document.createElement("div");
-          card.className = "item-card" + (isOrderable ? "" : " is-readonly");
+          card.className = "item-card" + (editable ? "" : " is-readonly");
 
           const itemRow = document.createElement("div");
           itemRow.className = "item-row";
@@ -191,9 +303,9 @@
             (it.desc ? `<div class="item-desc">${it.desc}</div>` : "");
           itemRow.appendChild(main);
 
-          const qty = (isOrderable && cart[it.name]) ? cart[it.name].qty : 0;
+          const qty = (editable && cart && cart[it.name]) ? cart[it.name].qty : 0;
 
-          if (isOrderable) {
+          if (editable) {
             const stepper = document.createElement("div");
             stepper.className = "stepper";
             stepper.innerHTML = `<button type="button" data-action="dec">−</button><span class="qty tabular">${qty}</span><button type="button" data-action="inc">+</button>`;
@@ -204,7 +316,7 @@
 
           card.appendChild(itemRow);
 
-          if (isOrderable) {
+          if (editable) {
             const noteRow = document.createElement("div");
             noteRow.className = "note-row";
             const noteValue = cart[it.name]?.note || "";
@@ -223,6 +335,8 @@
     }
 
     function changeQty(item, delta) {
+      const cart = currentCart();
+      if (!cart) return;
       const current = cart[item.name]?.qty || 0;
       const next = Math.max(0, current + delta);
       const existingNote = cart[item.name]?.note || "";
@@ -234,6 +348,17 @@
 
     function renderSummary() {
       const body = document.getElementById("summary-body");
+      const cart = currentCart();
+      const totalEl = document.getElementById("summary-total");
+      const totalMobileEl = document.getElementById("summary-total-mobile");
+
+      if (cart === null) {
+        body.innerHTML = '<p class="summary-empty">Pro tento den nelze objednávat.</p>';
+        totalEl.textContent = fmt(0);
+        totalMobileEl.textContent = fmt(0);
+        return;
+      }
+
       const entries = Object.values(cart);
       if (entries.length === 0) {
         body.innerHTML = '<p class="summary-empty">Zatím nic nevybráno.</p>';
@@ -248,13 +373,16 @@
           </div>`).join("");
       }
       const total = entries.reduce((sum, e) => sum + e.price * e.qty, 0);
-      document.getElementById("summary-total").textContent = fmt(total);
-      document.getElementById("summary-total-mobile").textContent = fmt(total);
+      totalEl.textContent = fmt(total);
+      totalMobileEl.textContent = fmt(total);
     }
 
     async function submitOrder() {
-      const items = Object.entries(cart).map(([name, e]) => ({ item_name: name, quantity: e.qty, note: e.note || "" }));
+      const cart = currentCart();
+      const dateIso = currentDateIso();
       const statusEl = document.getElementById("submit-status-desktop");
+      if (!cart || !dateIso) return;
+      const items = Object.entries(cart).map(([name, e]) => ({ item_name: name, quantity: e.qty, note: e.note || "" }));
       if (items.length === 0) {
         statusEl.textContent = "Vyberte alespoň jednu položku.";
         statusEl.className = "submit-status error";
@@ -263,7 +391,7 @@
       const resp = await fetch("/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, order_date: dateIso }),
       });
       if (resp.ok) {
         statusEl.textContent = "Objednávka uložena.";
@@ -279,11 +407,21 @@
     const submitMobile = document.getElementById("submit-order-mobile");
     submitDesktop.addEventListener("click", submitOrder);
     submitMobile.addEventListener("click", submitOrder);
-    if (!ORDERING_OPEN) {
-      submitDesktop.disabled = true;
-      submitMobile.disabled = true;
-      submitDesktop.style.opacity = "0.5";
-      document.getElementById("submit-status-desktop").textContent = "Objednávky jsou dnes uzavřené.";
+
+    function updateSubmitState() {
+      const editable = isEditable(selectedDay);
+      submitDesktop.disabled = !editable;
+      submitMobile.disabled = !editable;
+      submitDesktop.style.opacity = editable ? "1" : "0.5";
+      const statusEl = document.getElementById("submit-status-desktop");
+      if (!editable) {
+        statusEl.textContent = selectedDay === TODAY
+          ? "Objednávky jsou dnes uzavřené."
+          : "Pro tento den nelze objednávat.";
+        statusEl.className = "submit-status";
+      } else {
+        statusEl.textContent = "";
+      }
     }
 
     // ---- Dashboard (fetched lazily on first visit to the tab) ----
@@ -304,17 +442,23 @@
       dashboardLoaded = true;
     }
 
+    function fmtKcal(n) { return n.toLocaleString("cs-CZ") + " kcal"; }
+
     function renderDashboard(data) {
       const mine = data.rows.find(r => r.user === USERNAME);
       document.getElementById("stat-week-mine").innerHTML = fmt(mine ? mine.week_total_czk : 0);
       document.getElementById("stat-month-mine").innerHTML = fmt(mine ? mine.month_total_czk : 0);
       document.getElementById("stat-week-all").innerHTML = fmt(data.week_aggregate_czk);
       document.getElementById("stat-month-all").innerHTML = fmt(data.month_aggregate_czk);
+      document.getElementById("stat-week-mine-kcal").textContent = fmtKcal(mine ? mine.week_total_kcal : 0);
+      document.getElementById("stat-month-mine-kcal").textContent = fmtKcal(mine ? mine.month_total_kcal : 0);
+      document.getElementById("stat-week-all-kcal").textContent = fmtKcal(data.week_aggregate_kcal);
+      document.getElementById("stat-month-all-kcal").textContent = fmtKcal(data.month_aggregate_kcal);
 
       const todayRows = data.rows.filter(r => r.order_date === TODAY_ISO);
       const body = document.getElementById("dash-body");
       if (todayRows.length === 0) {
-        body.innerHTML = '<tr><td colspan="5" class="items-note">Dnes zatím nikdo neobjednal.</td></tr>';
+        body.innerHTML = '<tr><td colspan="6" class="items-note">Dnes zatím nikdo neobjednal.</td></tr>';
       } else {
         body.innerHTML = todayRows.map(r => `
           <tr>
@@ -323,21 +467,26 @@
             <td class="num tabular">${fmt(r.daily_total_czk)}</td>
             <td class="num tabular">${fmt(r.week_total_czk)}</td>
             <td class="num tabular">${fmt(r.month_total_czk)}</td>
+            <td class="num tabular">${fmtKcal(r.daily_total_kcal)}</td>
           </tr>`).join("");
       }
       document.getElementById("dash-foot-day").textContent = fmt(todayRows.reduce((s, r) => s + r.daily_total_czk, 0));
       document.getElementById("dash-foot-week").textContent = fmt(data.week_aggregate_czk);
       document.getElementById("dash-foot-month").textContent = fmt(data.month_aggregate_czk);
+      document.getElementById("dash-foot-kcal").textContent = fmtKcal(todayRows.reduce((s, r) => s + r.daily_total_kcal, 0));
       document.getElementById("dash-week-range").textContent = TODAY_ISO;
     }
 
     document.querySelectorAll("[data-goto]").forEach(btn => {
       btn.addEventListener("click", () => {
         const target = btn.dataset.goto;
-        document.getElementById("view-order").classList.toggle("active", target === "order");
-        document.getElementById("view-dashboard").classList.toggle("active", target === "dashboard");
+        document.querySelectorAll(".screen").forEach(el => {
+          el.classList.toggle("active", el.id === "view-" + target);
+        });
         document.querySelectorAll("[data-goto]").forEach(b => b.toggleAttribute("aria-current", b.dataset.goto === target));
         if (target === "dashboard") loadDashboard();
+        if (target === "admin" && typeof refreshAdminUsers === "function") refreshAdminUsers();
+        if (target === "admin" && typeof refreshEarlyOrdering === "function") refreshEarlyOrdering();
       });
     });
 
@@ -349,6 +498,156 @@
     renderDays();
     renderMenu();
     renderSummary();
+    updateSubmitState();
   </script>
+
+  {% if user.is_admin %}
+  <script>
+    // ---- Admin panel ----
+    async function refreshAdminUsers() {
+      const resp = await fetch("/admin/users");
+      if (!resp.ok) return;
+      const users = await resp.json();
+      const body = document.getElementById("admin-users-body");
+      body.innerHTML = users.map(u => `
+        <tr>
+          <td>${u.username}</td>
+          <td><span class="role-badge${u.is_admin ? " admin" : ""}">${u.is_admin ? "Administrátor" : "Uživatel"}</span></td>
+          <td>${new Date(u.created_at).toLocaleDateString("cs-CZ")}</td>
+          <td class="num">
+            <button type="button" class="link-btn" data-action="reset" data-username="${u.username}">Reset hesla</button>
+            &nbsp;·&nbsp;
+            <button type="button" class="link-btn" data-action="toggle" data-username="${u.username}"${u.username === USERNAME ? " disabled" : ""}>${u.is_admin ? "Odebrat admina" : "Udělat adminem"}</button>
+          </td>
+        </tr>`).join("");
+
+      body.querySelectorAll('[data-action="reset"]').forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const newPassword = window.prompt(`Nové heslo pro ${btn.dataset.username}:`);
+          if (!newPassword) return;
+          const resp = await fetch(`/admin/users/${encodeURIComponent(btn.dataset.username)}/reset-password`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ new_password: newPassword }),
+          });
+          if (!resp.ok) alert("Nepodařilo se resetovat heslo.");
+        });
+      });
+
+      body.querySelectorAll('[data-action="toggle"]').forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if (!confirm(`Změnit administrátorská práva pro ${btn.dataset.username}?`)) return;
+          const resp = await fetch(`/admin/users/${encodeURIComponent(btn.dataset.username)}/toggle-admin`, { method: "POST" });
+          if (resp.ok) refreshAdminUsers();
+          else alert("Nepodařilo se změnit roli.");
+        });
+      });
+    }
+
+    document.getElementById("admin-create-user-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const statusEl = document.getElementById("admin-create-status");
+      const resp = await fetch("/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: form.username.value,
+          password: form.password.value,
+          is_admin: form.is_admin.checked,
+        }),
+      });
+      if (resp.ok) {
+        statusEl.textContent = "Uživatel vytvořen.";
+        statusEl.className = "submit-status ok";
+        form.reset();
+        refreshAdminUsers();
+      } else {
+        const body = await resp.json().catch(() => ({}));
+        statusEl.textContent = body.detail || "Vytvoření se nezdařilo.";
+        statusEl.className = "submit-status error";
+      }
+    });
+
+    document.getElementById("admin-clear-menu").addEventListener("click", async () => {
+      if (!confirm("Opravdu smazat menu tohoto týdne? Tuto akci nelze vrátit zpět.")) return;
+      const statusEl = document.getElementById("admin-action-status");
+      statusEl.textContent = "Mažu...";
+      statusEl.className = "submit-status";
+      const resp = await fetch("/admin/clear-menu", { method: "POST" });
+      const body = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        statusEl.textContent = `Smazáno ${body.items_deleted} položek.`;
+        statusEl.className = "submit-status ok";
+      } else {
+        statusEl.textContent = body.detail || "Smazání se nezdařilo.";
+        statusEl.className = "submit-status error";
+      }
+    });
+
+    async function refreshEarlyOrdering() {
+      const resp = await fetch("/admin/early-ordering");
+      if (!resp.ok) return;
+      const state = await resp.json();
+      const statusSpan = document.getElementById("early-ordering-status");
+      const toggleBtn = document.getElementById("admin-early-toggle");
+      if (state.open) {
+        statusSpan.textContent = `Objednávky na ${state.date} jsou otevřené.`;
+        toggleBtn.textContent = "Zavřít předobjednávku";
+        toggleBtn.classList.add("btn-danger");
+      } else {
+        statusSpan.textContent = `Další pracovní den: ${state.date} (zatím uzavřeno).`;
+        toggleBtn.textContent = "Otevřít objednávky na tento den";
+        toggleBtn.classList.remove("btn-danger");
+      }
+      toggleBtn.dataset.open = state.open ? "1" : "0";
+    }
+
+    document.getElementById("admin-early-toggle").addEventListener("click", async () => {
+      const btn = document.getElementById("admin-early-toggle");
+      const isOpen = btn.dataset.open === "1";
+      const statusEl = document.getElementById("early-ordering-action-status");
+      const resp = await fetch(`/admin/early-ordering/${isOpen ? "close" : "open"}`, { method: "POST" });
+      const body = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        statusEl.textContent = "";
+        refreshEarlyOrdering();
+      } else {
+        statusEl.textContent = body.detail || "Akce se nezdařila.";
+        statusEl.className = "submit-status error";
+      }
+    });
+
+    document.getElementById("admin-parse-menu").addEventListener("click", async () => {
+      const statusEl = document.getElementById("admin-action-status");
+      statusEl.textContent = "Načítám...";
+      statusEl.className = "submit-status";
+      const resp = await fetch("/admin/parse-menu", { method: "POST" });
+      const body = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        statusEl.textContent = `Menu načteno: ${body.items_parsed} položek.`;
+        statusEl.className = "submit-status ok";
+      } else {
+        statusEl.textContent = body.detail || "Načtení menu se nezdařilo.";
+        statusEl.className = "submit-status error";
+      }
+    });
+
+    document.getElementById("admin-send-summary").addEventListener("click", async () => {
+      const statusEl = document.getElementById("admin-action-status");
+      statusEl.textContent = "Odesílám...";
+      statusEl.className = "submit-status";
+      const resp = await fetch("/admin/send-order-summary", { method: "POST" });
+      const body = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        statusEl.textContent = `Odesláno (${body.order_lines_sent} položek).`;
+        statusEl.className = "submit-status ok";
+      } else {
+        statusEl.textContent = body.detail || "Odeslání se nezdařilo.";
+        statusEl.className = "submit-status error";
+      }
+    });
+  </script>
+  {% endif %}
 </body>
 </html>

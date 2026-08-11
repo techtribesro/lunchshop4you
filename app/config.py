@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     session_secret: str = "change-me"
     session_idle_timeout_hours: int = 24
 
+    admin_username: str = ""
+    admin_password: str = ""
+
     order_cutoff_time: str = "11:30"
 
     timezone: str = "Europe/Prague"

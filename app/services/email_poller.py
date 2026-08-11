@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import MenuItem
+from app.services.calorie_estimator import estimate_calories
 from app.services.gemini_extractor import GeminiExtractionError, extract_menu_with_gemini
 from app.services.menu_parser import parse_menu_email
 from app.timezone import now_local_naive, week_start
@@ -149,6 +150,8 @@ def refresh_menu(db: Session) -> int:
     else:
         parsed_items = parse_menu_email(payload)
 
+    calories_by_name = estimate_calories(parsed_items)
+
     current_week = week_start()
     parsed_at = now_local_naive()
 
@@ -161,6 +164,7 @@ def refresh_menu(db: Session) -> int:
             item_name=item.item_name,
             description=item.description,
             price_czk=item.price_czk,
+            calories_kcal=calories_by_name.get(item.item_name),
             parsed_at=parsed_at,
         )
         for item in parsed_items

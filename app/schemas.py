@@ -14,6 +14,7 @@ class MenuItemOut(BaseModel):
     item_name: str
     description: str
     price_czk: int
+    calories_kcal: int | None
 
     model_config = {"from_attributes": True}
 
@@ -26,6 +27,7 @@ class OrderLineIn(BaseModel):
 
 class OrderSubmitRequest(BaseModel):
     items: list[OrderLineIn]
+    order_date: date | None = None
 
 
 class OrderLineOut(BaseModel):
@@ -46,9 +48,32 @@ class DashboardRow(BaseModel):
     daily_total_czk: int
     week_total_czk: int
     month_total_czk: int
+    daily_total_kcal: int
+    week_total_kcal: int
+    month_total_kcal: int
 
 
 class DashboardResponse(BaseModel):
     rows: list[DashboardRow]
     week_aggregate_czk: int
     month_aggregate_czk: int
+    week_aggregate_kcal: int
+    month_aggregate_kcal: int
+
+
+class AdminUserOut(BaseModel):
+    username: str
+    is_admin: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AdminCreateUserRequest(BaseModel):
+    username: str
+    password: str
+    is_admin: bool = False
+
+
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str

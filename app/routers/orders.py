@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.models import MenuItem, Order, User
+from app.models import EarlyOrderingWindow, MenuItem, Order, User
 from app.schemas import OrderLineOut, OrderSubmitRequest
 from app.timezone import is_before_cutoff, today_local, week_start
 
@@ -12,44 +12,58 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
 
+def _check_ordering_allowed(db: Session, target_date) -> None:
+    today = today_local()
+
+    if target_date < today:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot order for a past date")
+
+    if target_date == today:
+        if not is_before_cutoff():
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Order cutoff has passed for today")
+    else:
+        window = db.query(EarlyOrderingWindow).filter(EarlyOrderingWindow.order_date == target_date).first()
+        if window is None:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Ordering for {target_date} is not open yet")
+
+    if target_date.weekday() >= 5:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No ordering on weekends")
+
+
 @router.post("", response_model=list[OrderLineOut])
 def submit_order(
     payload: OrderSubmitRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not is_before_cutoff():
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Order cutoff has passed for today")
+    target_date = payload.order_date or today_local()
+    _check_ordering_allowed(db, target_date)
 
-    today = today_local()
-    if today.weekday() >= 5:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No ordering on weekends")
-
-    day_name = DAY_NAMES[today.weekday()]
-    todays_week_start = week_start(today)
+    day_name = DAY_NAMES[target_date.weekday()]
+    target_week_start = week_start(target_date)
 
     menu_by_name = {
         item.item_name: item
         for item in db.query(MenuItem)
-        .filter(MenuItem.week_start == todays_week_start, MenuItem.day == day_name)
+        .filter(MenuItem.week_start == target_week_start, MenuItem.day == day_name)
         .all()
     }
 
     for line in payload.items:
         if line.item_name not in menu_by_name:
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, f"'{line.item_name}' is not on today's menu"
+                status.HTTP_400_BAD_REQUEST, f"'{line.item_name}' is not on the menu for {target_date}"
             )
         if line.quantity < 1:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Quantity must be at least 1")
 
-    db.query(Order).filter(Order.user_id == user.id, Order.order_date == today).delete()
+    db.query(Order).filter(Order.user_id == user.id, Order.order_date == target_date).delete()
 
     new_orders = [
         Order(
             user_id=user.id,
-            order_date=today,
-            week_start=todays_week_start,
+            order_date=target_date,
+            week_start=target_week_start,
             item_name=line.item_name,
             quantity=line.quantity,
             unit_price_czk=menu_by_name[line.item_name].price_czk,
@@ -60,7 +74,7 @@ def submit_order(
     db.add_all(new_orders)
     db.commit()
 
-    return db.query(Order).filter(Order.user_id == user.id, Order.order_date == today).all()
+    return db.query(Order).filter(Order.user_id == user.id, Order.order_date == target_date).all()
 
 
 @router.get("/my-week", response_model=list[OrderLineOut])

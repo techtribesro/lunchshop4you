@@ -6,6 +6,18 @@ primary_region = "fra"
 [env]
   DATABASE_PATH = "/data/lunchshop.db"
   GOOGLE_SERVICE_ACCOUNT_JSON = "/secrets/service-account.json"
+  GMAIL_IMAP_HOST = "imap.gmail.com"
+  GMAIL_IMAP_USER = "lunchshop4you@gmail.com"
+  GMAIL_SMTP_HOST = "smtp.gmail.com"
+  GMAIL_SMTP_PORT = "587"
+  MENU_EMAIL_SENDER = ""
+  ORDER_CUTOFF_TIME = "11:30"
+  ORDER_SUMMARY_SEND_TIME = "11:35"
+  ORDER_SUMMARY_RECIPIENT_EMAIL = "jakob.r.jakov@gmail.com"
+  ORDER_SUMMARY_RECIPIENT_NAME = "Honza"
+  ORDER_SUMMARY_SENDER_NAME = "Yakob"
+  ADMIN_USERNAME = "yakob"
+  TIMEZONE = "Europe/Prague"
 
 [mounts]
   source = "lunchshop_data"

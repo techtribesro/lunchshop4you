@@ -12,8 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import MenuItem, Order, User
+from app.services.dashboard import compute_dashboard
 
 logger = logging.getLogger("sheets_sync")
+
+TAB_NAMES = ["menu", "orders", "dashboard"]
 
 _service = None
 
@@ -54,27 +57,52 @@ def _get_service():
     return _service
 
 
+def _ensure_tab_exists(service, spreadsheet_id: str, title: str) -> None:
+    meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    existing = {s["properties"]["title"] for s in meta["sheets"]}
+    if title in existing:
+        return
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={"requests": [{"addSheet": {"properties": {"title": title}}}]},
+    ).execute()
+
+
 def _write_sheet(sheet_name: str, header: list[str], rows: list[list]) -> None:
     service = _get_service()
     if service is None:
         return
 
-    body = {"values": [header] + rows}
+    spreadsheet_id = settings.google_sheets_spreadsheet_id
+    _ensure_tab_exists(service, spreadsheet_id, sheet_name)
+
+    # Clear first -- a plain values().update() only overwrites the cells it
+    # addresses, so a sync with fewer rows than last time would otherwise
+    # leave stale trailing rows behind.
+    service.spreadsheets().values().clear(spreadsheetId=spreadsheet_id, range=sheet_name).execute()
+
     service.spreadsheets().values().update(
-        spreadsheetId=settings.google_sheets_spreadsheet_id,
+        spreadsheetId=spreadsheet_id,
         range=f"{sheet_name}!A1",
         valueInputOption="RAW",
-        body=body,
+        body={"values": [header] + rows},
     ).execute()
 
 
 def sync_menu(db: Session) -> None:
     items = db.query(MenuItem).order_by(MenuItem.week_start, MenuItem.day, MenuItem.category).all()
     rows = [
-        [i.week_start.isoformat(), i.day, i.category, i.item_name, i.description, i.price_czk, i.parsed_at.isoformat()]
+        [
+            i.week_start.isoformat(), i.day, i.category, i.item_name, i.description,
+            i.price_czk, i.calories_kcal, i.parsed_at.isoformat(),
+        ]
         for i in items
     ]
-    _write_sheet("menu", ["week_start", "day", "category", "item_name", "description", "price_czk", "parsed_at"], rows)
+    _write_sheet(
+        "menu",
+        ["week_start", "day", "category", "item_name", "description", "price_czk", "calories_kcal", "parsed_at"],
+        rows,
+    )
 
 
 def sync_orders(db: Session) -> None:
@@ -87,6 +115,7 @@ def sync_orders(db: Session) -> None:
             o.item_name,
             o.quantity,
             o.unit_price_czk,
+            o.note,
             o.submitted_at.isoformat(),
             o.week_start.isoformat(),
         ]
@@ -94,7 +123,41 @@ def sync_orders(db: Session) -> None:
     ]
     _write_sheet(
         "orders",
-        ["user_id", "order_date", "item_name", "quantity", "unit_price_czk", "submitted_at", "week_start"],
+        ["user", "order_date", "item_name", "quantity", "unit_price_czk", "note", "submitted_at", "week_start"],
+        rows,
+    )
+
+
+def sync_dashboard(db: Session) -> None:
+    data = compute_dashboard(db)
+    rows = [
+        [
+            r.user,
+            r.order_date.isoformat(),
+            r.items_ordered,
+            r.daily_total_czk,
+            r.week_total_czk,
+            r.month_total_czk,
+            r.daily_total_kcal,
+            r.week_total_kcal,
+            r.month_total_kcal,
+        ]
+        for r in data.rows
+    ]
+    rows.append(
+        [
+            "TOTAL", "", "", "",
+            data.week_aggregate_czk, data.month_aggregate_czk,
+            "", data.week_aggregate_kcal, data.month_aggregate_kcal,
+        ]
+    )
+    _write_sheet(
+        "dashboard",
+        [
+            "user", "order_date", "items_ordered",
+            "daily_total_czk", "week_total_czk", "month_total_czk",
+            "daily_total_kcal", "week_total_kcal", "month_total_kcal",
+        ],
         rows,
     )
 
@@ -103,5 +166,6 @@ def sync_all(db: Session) -> None:
     try:
         sync_menu(db)
         sync_orders(db)
+        sync_dashboard(db)
     except Exception:
         logger.exception("Google Sheets sync failed")
