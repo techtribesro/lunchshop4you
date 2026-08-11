@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth import hash_password, require_admin
 from app.db import get_db
 from app.models import EarlyOrderingWindow, MenuItem, User
-from app.schemas import AdminCreateUserRequest, AdminResetPasswordRequest, AdminUserOut
+from app.schemas import AdminCreateUserRequest, AdminResetPasswordRequest, AdminSetCaloriesRequest, AdminUserOut
 from app.services.email_poller import EmailPollError, refresh_menu
 from app.services.order_summary import OrderSummaryError, send_daily_order_summary
 from app.services.sheets_sync import sync_all
@@ -38,6 +38,33 @@ def clear_menu(
     db.commit()
     sync_all(db)
     return {"items_deleted": deleted}
+
+
+@router.post("/menu/calories")
+def set_menu_calories(
+    payload: AdminSetCaloriesRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Manual kcal backfill for the current week's menu, bypassing Gemini --
+    for filling in estimates without spending free-tier quota (e.g. when the
+    menu was parsed before the kcal-in-extraction feature existed)."""
+    current_week = week_start()
+    updated = 0
+    for entry in payload.items:
+        result = (
+            db.query(MenuItem)
+            .filter(
+                MenuItem.week_start == current_week,
+                MenuItem.day == entry.day,
+                MenuItem.item_name == entry.item_name,
+            )
+            .update({"calories_kcal": entry.calories_kcal})
+        )
+        updated += result
+    db.commit()
+    sync_all(db)
+    return {"items_updated": updated}
 
 
 @router.post("/send-order-summary")

@@ -77,3 +77,13 @@ class AdminCreateUserRequest(BaseModel):
 
 class AdminResetPasswordRequest(BaseModel):
     new_password: str
+
+
+class AdminCaloriesEntry(BaseModel):
+    day: str
+    item_name: str
+    calories_kcal: int
+
+
+class AdminSetCaloriesRequest(BaseModel):
+    items: list[AdminCaloriesEntry]
