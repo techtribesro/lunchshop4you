@@ -92,13 +92,20 @@ Gated by `is_admin` (`require_admin` dependency, 403 otherwise). Available actio
 ## 6. Calorie Estimation
 
 - Estimated kcal per dish is shown on menu item cards, in the order summary panel (a
-  running total for the current cart), and in weekly/monthly dashboard totals.
+  running total for the current cart, including early-ordering carts), and in
+  weekly/monthly dashboard totals.
 - Sourced from Gemini as part of the PDF-extraction call described in §1 — **not** a
   separate call — because Gemini's free tier caps at **20 requests/day per project per
   model**, shared across menu parsing and (rarely) the text-fallback calorie call. A
   second daily consumer (e.g. Gemini-generated order-summary copy) was deliberately
   removed for the same reason — see §8.
 - Values are best-effort LLM estimates, not authoritative nutrition data.
+- **Manual backfill:** `POST /admin/menu/calories` lets an admin set `calories_kcal` for
+  specific (day, item_name) rows in the current week directly, bypassing Gemini
+  entirely. This exists for cases like a menu parsed before the kcal feature existed (so
+  every row is `null`), or when quota is tight and rough hand-entered estimates are good
+  enough for the day — no Gemini call spent, and the next scheduled/triggered re-parse
+  overwrites these with real Gemini estimates anyway.
 
 ## 7. Authentication Architecture Note
 
@@ -176,9 +183,14 @@ purely so the data is human-browsable/auditable outside the app.
   minutes after the 11:30 cutoff to let last-second edits settle).
 - Recipient: `ORDER_SUMMARY_RECIPIENT_EMAIL` / `ORDER_SUMMARY_RECIPIENT_NAME` (the
   restaurant contact, "Honza"). Sender display name: `ORDER_SUMMARY_SENDER_NAME`.
-- Body is an HTML table (per-person line items, then a per-dish "Souhrn podle jídla"
-  summary) sent via STARTTLS on port 587 — no `.xlsx` attachment, no spreadsheet
-  dependency.
+- Body is a **single** HTML table, one row per dish, columns: Jídlo (dish), Počet
+  (total quantity), Kdo (each buyer with their quantity, e.g. "Yakob ×2, Toan ×1"),
+  Poznámky (per-item notes, e.g. allergies/exclusions — rendered in a **red-bordered
+  box** so they visually stand out to the restaurant). An earlier version sent two
+  tables (a per-person list plus a separate per-dish summary); this was collapsed to one
+  table per explicit request — the restaurant only needs to know what to prepare, how
+  many, for whom, and what to watch out for, in one place. Sent via STARTTLS on port
+  587 — no `.xlsx` attachment, no spreadsheet dependency.
 - **The email copy (greeting/intro/thanks) is a static, hardcoded template**
   (`app/services/order_summary.py::EMAIL_COPY`), not Gemini-generated. This was a
   deliberate call: this email fires automatically every weekday, and spending a Gemini
@@ -221,6 +233,8 @@ purely so the data is human-browsable/auditable outside the app.
 - `POST /admin/users` — create a user
 - `POST /admin/users/{username}/reset-password`
 - `POST /admin/users/{username}/toggle-admin`
+- `POST /admin/menu/calories` — manually set kcal for specific current-week menu items
+  (see §6)
 
 ### Ops
 - `GET /health`
@@ -284,3 +298,11 @@ provenance for anyone reading the code later:
   order-summary email copy instead of generating it (§ Email).
 - **bcrypt via the raw `bcrypt` package**, not `passlib` — `passlib` is incompatible
   with `bcrypt>=4.1`.
+- **Sticky topbar overlap bug**: `.topbar { top: 41px }` was copied verbatim from an
+  earlier HTML mockup, where a dev-only sticky switcher bar sat above the real topbar
+  and the offset compensated for it. The real app has no such bar, so the offset just
+  left a gap that scrolled content (e.g. the admin panel's "Administrace" heading)
+  visually collided with. Fixed to `top: 0`.
+- **Wordmark rendering as "Ob ěd"**: `.wordmark`/`.login-mark` used a flex `gap` between
+  a styled `<span>` and adjacent bare text; browsers wrap bare text in an anonymous flex
+  item, so `gap` inserted unwanted space between them. Fixed by zeroing the gap.
