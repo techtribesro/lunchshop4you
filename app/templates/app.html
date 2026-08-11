@@ -12,12 +12,22 @@
     .item-card.is-readonly .item-desc { white-space: normal; overflow: visible; text-overflow: clip; }
     .item-card.is-readonly { opacity: 0.85; }
 
-    .admin-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 24px; }
+    .admin-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      transition: border-color 0.15s ease;
+    }
+    .admin-card:hover { border-color: var(--ink-faint); }
+    .admin-card-title { font-size: 15px; margin: 0 0 14px; }
+
+    .admin-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .admin-actions .btn-primary { width: auto; padding: 10px 18px; }
     .admin-actions .submit-status { margin: 0; text-align: left; }
     .btn-danger { background: var(--critical); }
     .btn-danger:hover { background: var(--critical); opacity: 0.85; }
-    .admin-section-title { margin: 28px 0 12px; }
     .admin-form { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
     .admin-form .field { margin-bottom: 0; min-width: 180px; }
     .admin-form .btn-primary { width: auto; padding: 10px 20px; }
@@ -27,6 +37,26 @@
       font-size: 11.5px; font-weight: 600; background: var(--line-soft); color: var(--ink-muted);
     }
     .role-badge.admin { background: var(--accent-tint); color: var(--accent-strong); }
+
+    .chip-btn {
+      display: inline-flex;
+      align-items: center;
+      background: var(--surface-raised);
+      border: 1px solid var(--line);
+      color: var(--ink-muted);
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 999px;
+      transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+    }
+    .chip-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+    .chip-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .chip-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .chip-btn.danger { color: var(--critical); }
+    .chip-btn.danger:hover { border-color: var(--critical); }
+    .admin-row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+    .status-note { font-size: 13.5px; color: var(--ink-muted); }
   </style>
 </head>
 <body>
@@ -155,51 +185,60 @@
         <h2>Administrace</h2>
       </div>
 
-      <div class="admin-actions">
-        <button class="btn-primary" type="button" id="admin-parse-menu">Načíst menu z e-mailu</button>
-        <button class="btn-primary btn-danger" type="button" id="admin-clear-menu">Vynutit smazání menu (tento týden)</button>
-        <button class="btn-primary" type="button" id="admin-send-summary">Odeslat dnešní objednávku</button>
-        <p class="submit-status" id="admin-action-status"></p>
-      </div>
-
-      <h3 class="summary-title admin-section-title">Předobjednávka na další den</h3>
-      <div class="admin-actions">
-        <span id="early-ordering-status" style="font-size:13.5px;color:var(--ink-muted);"></span>
-        <button class="btn-primary" type="button" id="admin-early-toggle"></button>
-        <p class="submit-status" id="early-ordering-action-status"></p>
-      </div>
-
-      <h3 class="summary-title admin-section-title">Uživatelé</h3>
-      <div class="dash-table-wrap">
-        <table class="dash-table">
-          <thead>
-            <tr>
-              <th>Uživatel</th>
-              <th>Role</th>
-              <th>Vytvořen</th>
-              <th class="num">Akce</th>
-            </tr>
-          </thead>
-          <tbody id="admin-users-body"><!-- rows injected by JS --></tbody>
-        </table>
-      </div>
-
-      <h3 class="summary-title admin-section-title">Nový uživatel</h3>
-      <form id="admin-create-user-form" class="admin-form">
-        <div class="field">
-          <label for="new-username">Uživatelské jméno</label>
-          <input id="new-username" name="username" type="text" required />
+      <div class="admin-card">
+        <h3 class="admin-card-title">Menu a objednávka</h3>
+        <div class="admin-actions">
+          <button class="btn-primary" type="button" id="admin-parse-menu">Načíst menu z e-mailu</button>
+          <button class="btn-primary btn-danger" type="button" id="admin-clear-menu">Vynutit smazání menu (tento týden)</button>
+          <button class="btn-primary" type="button" id="admin-send-summary">Odeslat dnešní objednávku</button>
+          <p class="submit-status" id="admin-action-status"></p>
         </div>
-        <div class="field">
-          <label for="new-password">Heslo</label>
-          <input id="new-password" name="password" type="text" required />
+      </div>
+
+      <div class="admin-card">
+        <h3 class="admin-card-title">Předobjednávka na další den</h3>
+        <div class="admin-actions">
+          <span id="early-ordering-status" class="status-note"></span>
+          <button class="btn-primary" type="button" id="admin-early-toggle"></button>
+          <p class="submit-status" id="early-ordering-action-status"></p>
         </div>
-        <label class="admin-checkbox">
-          <input type="checkbox" name="is_admin" /> Administrátor
-        </label>
-        <button class="btn-primary" type="submit">Vytvořit uživatele</button>
-      </form>
-      <p class="submit-status" id="admin-create-status"></p>
+      </div>
+
+      <div class="admin-card">
+        <h3 class="admin-card-title">Uživatelé</h3>
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Uživatel</th>
+                <th>Role</th>
+                <th>Vytvořen</th>
+                <th class="num">Akce</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-body"><!-- rows injected by JS --></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <h3 class="admin-card-title">Nový uživatel</h3>
+        <form id="admin-create-user-form" class="admin-form">
+          <div class="field">
+            <label for="new-username">Uživatelské jméno</label>
+            <input id="new-username" name="username" type="text" required />
+          </div>
+          <div class="field">
+            <label for="new-password">Heslo</label>
+            <input id="new-password" name="password" type="text" required />
+          </div>
+          <label class="admin-checkbox">
+            <input type="checkbox" name="is_admin" /> Administrátor
+          </label>
+          <button class="btn-primary" type="submit">Vytvořit uživatele</button>
+        </form>
+        <p class="submit-status" id="admin-create-status"></p>
+      </div>
     </div>
   </div>
   {% endif %}
@@ -467,8 +506,8 @@
         body.innerHTML = '<tr><td colspan="6" class="items-note">Dnes zatím nikdo neobjednal.</td></tr>';
       } else {
         body.innerHTML = todayRows.map(r => `
-          <tr>
-            <td><div class="who"><div class="avatar">${initials(r.user)}</div>${r.user}</div></td>
+          <tr class="${r.user === USERNAME ? "is-you" : ""}">
+            <td><div class="who"><div class="avatar">${initials(r.user)}</div>${r.user}${r.user === USERNAME ? '<span class="you-tag">Vy</span>' : ""}</div></td>
             <td class="items-note">${itemsLabel(r.items_ordered)}</td>
             <td class="num tabular">${fmt(r.daily_total_czk)}</td>
             <td class="num tabular">${fmt(r.week_total_czk)}</td>
@@ -516,14 +555,15 @@
       const users = await resp.json();
       const body = document.getElementById("admin-users-body");
       body.innerHTML = users.map(u => `
-        <tr>
-          <td>${u.username}</td>
+        <tr class="${u.username === USERNAME ? "is-you" : ""}">
+          <td>${u.username}${u.username === USERNAME ? ' <span class="you-tag">Vy</span>' : ""}</td>
           <td><span class="role-badge${u.is_admin ? " admin" : ""}">${u.is_admin ? "Administrátor" : "Uživatel"}</span></td>
           <td>${new Date(u.created_at).toLocaleDateString("cs-CZ")}</td>
           <td class="num">
-            <button type="button" class="link-btn" data-action="reset" data-username="${u.username}">Reset hesla</button>
-            &nbsp;·&nbsp;
-            <button type="button" class="link-btn" data-action="toggle" data-username="${u.username}"${u.username === USERNAME ? " disabled" : ""}>${u.is_admin ? "Odebrat admina" : "Udělat adminem"}</button>
+            <div class="admin-row-actions">
+              <button type="button" class="chip-btn" data-action="reset" data-username="${u.username}">Reset hesla</button>
+              <button type="button" class="chip-btn${u.is_admin ? " danger" : ""}" data-action="toggle" data-username="${u.username}"${u.username === USERNAME ? " disabled" : ""}>${u.is_admin ? "Odebrat admina" : "Udělat adminem"}</button>
+            </div>
           </td>
         </tr>`).join("");
 
