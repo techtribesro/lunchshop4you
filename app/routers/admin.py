@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,6 +12,7 @@ from app.schemas import (
     AdminCreateUserRequest,
     AdminResetPasswordRequest,
     AdminSetCaloriesRequest,
+    AdminSetPricesRequest,
     AdminUserOut,
     OrderLineOut,
 )
@@ -19,9 +21,24 @@ from app.services.order_summary import OrderSummaryError, send_daily_order_summa
 from app.services.sheets_sync import sync_all
 from app.timezone import next_business_day, week_start
 
+logger = logging.getLogger("admin")
+
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+
+def _sync_all_best_effort(db: Session) -> None:
+    """Sheets sync is a reporting mirror, not the source of truth -- an
+    error here (API failure, bad credentials, etc.) must never be allowed
+    to make an otherwise-successful DB write look like it failed to the
+    caller. (Doesn't protect against the process being OOM-killed mid-sync
+    -- that still drops the response -- but the DB write underneath has
+    already been committed by that point regardless.)"""
+    try:
+        sync_all(db)
+    except Exception:
+        logger.exception("Sheets sync failed after a successful admin write; continuing")
 
 
 @router.post("/parse-menu")
@@ -34,7 +51,7 @@ def parse_menu(
     except EmailPollError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
-    sync_all(db)
+    _sync_all_best_effort(db)
     return {"items_parsed": item_count}
 
 
@@ -47,7 +64,7 @@ def clear_menu(
     bad parse before retrying, independent of the email pipeline."""
     deleted = db.query(MenuItem).filter(MenuItem.week_start == week_start()).delete()
     db.commit()
-    sync_all(db)
+    _sync_all_best_effort(db)
     return {"items_deleted": deleted}
 
 
@@ -74,26 +91,35 @@ def set_menu_calories(
         )
         updated += result
     db.commit()
-    sync_all(db)
+    _sync_all_best_effort(db)
     return {"items_updated": updated}
 
 
-@router.post("/menu/apply-non-soup-discount")
-def apply_non_soup_discount(
+@router.post("/menu/prices")
+def set_menu_prices(
+    payload: AdminSetPricesRequest,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """One-time backfill for menu rows stored before the standing 50 CZK
-    non-soup discount (see email_poller.NON_SOUP_DISCOUNT_CZK) was applied
-    automatically at parse time. Not idempotent -- calling this twice on
-    the same rows double-discounts them."""
+    """Manual price backfill for the current week's menu -- sets absolute
+    prices (idempotent: calling it twice with the same payload is a no-op),
+    unlike a relative adjustment which would compound on every retry."""
     current_week = week_start()
-    items = db.query(MenuItem).filter(MenuItem.week_start == current_week, MenuItem.category != "Polévka").all()
-    for item in items:
-        item.price_czk = max(item.price_czk - 50, 0)
+    updated = 0
+    for entry in payload.items:
+        result = (
+            db.query(MenuItem)
+            .filter(
+                MenuItem.week_start == current_week,
+                MenuItem.day == entry.day,
+                MenuItem.item_name == entry.item_name,
+            )
+            .update({"price_czk": entry.price_czk})
+        )
+        updated += result
     db.commit()
-    sync_all(db)
-    return {"items_updated": len(items)}
+    _sync_all_best_effort(db)
+    return {"items_updated": updated}
 
 
 @router.get("/orders", response_model=list[OrderLineOut])

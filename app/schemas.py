@@ -89,6 +89,16 @@ class AdminSetCaloriesRequest(BaseModel):
     items: list[AdminCaloriesEntry]
 
 
+class AdminPriceEntry(BaseModel):
+    day: str
+    item_name: str
+    price_czk: int
+
+
+class AdminSetPricesRequest(BaseModel):
+    items: list[AdminPriceEntry]
+
+
 class AdminAssignOrderRequest(BaseModel):
     username: str
     order_date: date
