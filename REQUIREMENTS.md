@@ -88,6 +88,12 @@ Gated by `is_admin` (`require_admin` dependency, 403 otherwise). Available actio
 - View / open / close the early-ordering window for the next business day.
 - List users, create a user (with optional admin flag), reset a password, toggle a
   user's admin status.
+- **Assign a meal to a user directly**: pick a user and a weekday of the current week,
+  set item quantities the same way the order screen does, and save — this replaces that
+  user's order for that date (same delete-then-insert semantics as self-service
+  ordering). Unlike normal ordering, this **bypasses the cutoff and early-ordering
+  rules entirely** — it exists specifically to fill in an order for someone who forgot,
+  is out of office, etc., not to route around the schedule for yourself.
 
 ## 6. Calorie Estimation
 
@@ -239,6 +245,10 @@ purely so the data is human-browsable/auditable outside the app.
 - `POST /admin/users/{username}/toggle-admin`
 - `POST /admin/menu/calories` — manually set kcal for specific current-week menu items
   (see §6)
+- `GET /admin/orders` — look up a specific user's order for a given date (`username`,
+  `order_date` query params)
+- `POST /admin/orders` — set (replace) a user's order for a given date on their behalf,
+  bypassing cutoff (see §5)
 
 ### Ops
 - `GET /health`

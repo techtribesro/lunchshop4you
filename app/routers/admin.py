@@ -1,16 +1,27 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password, require_admin
 from app.db import get_db
-from app.models import EarlyOrderingWindow, MenuItem, User
-from app.schemas import AdminCreateUserRequest, AdminResetPasswordRequest, AdminSetCaloriesRequest, AdminUserOut
+from app.models import EarlyOrderingWindow, MenuItem, Order, User
+from app.schemas import (
+    AdminAssignOrderRequest,
+    AdminCreateUserRequest,
+    AdminResetPasswordRequest,
+    AdminSetCaloriesRequest,
+    AdminUserOut,
+    OrderLineOut,
+)
 from app.services.email_poller import EmailPollError, refresh_menu
 from app.services.order_summary import OrderSummaryError, send_daily_order_summary
 from app.services.sheets_sync import sync_all
 from app.timezone import next_business_day, week_start
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
 
 @router.post("/parse-menu")
@@ -65,6 +76,78 @@ def set_menu_calories(
     db.commit()
     sync_all(db)
     return {"items_updated": updated}
+
+
+@router.get("/orders", response_model=list[OrderLineOut])
+def get_assigned_order(
+    username: str,
+    order_date: date,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    target_user = db.query(User).filter(User.username == username).first()
+    if target_user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{username}' not found")
+    return (
+        db.query(Order)
+        .filter(Order.user_id == target_user.id, Order.order_date == order_date)
+        .order_by(Order.item_name)
+        .all()
+    )
+
+
+@router.post("/orders", response_model=list[OrderLineOut])
+def assign_order(
+    payload: AdminAssignOrderRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Lets an admin set a user's order for a given date directly -- bypasses
+    the normal cutoff/early-ordering rules, since the whole point is to fill
+    in orders on someone's behalf (forgot to order, out of office, etc.)."""
+    target_user = db.query(User).filter(User.username == payload.username).first()
+    if target_user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{payload.username}' not found")
+
+    if payload.order_date.weekday() >= 5:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No ordering on weekends")
+
+    day_name = DAY_NAMES[payload.order_date.weekday()]
+    target_week_start = week_start(payload.order_date)
+
+    menu_by_name = {
+        item.item_name: item
+        for item in db.query(MenuItem)
+        .filter(MenuItem.week_start == target_week_start, MenuItem.day == day_name)
+        .all()
+    }
+
+    for line in payload.items:
+        if line.item_name not in menu_by_name:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, f"'{line.item_name}' is not on the menu for {payload.order_date}"
+            )
+        if line.quantity < 1:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Quantity must be at least 1")
+
+    db.query(Order).filter(Order.user_id == target_user.id, Order.order_date == payload.order_date).delete()
+
+    new_orders = [
+        Order(
+            user_id=target_user.id,
+            order_date=payload.order_date,
+            week_start=target_week_start,
+            item_name=line.item_name,
+            quantity=line.quantity,
+            unit_price_czk=menu_by_name[line.item_name].price_czk,
+            note=line.note.strip()[:255],
+        )
+        for line in payload.items
+    ]
+    db.add_all(new_orders)
+    db.commit()
+
+    return db.query(Order).filter(Order.user_id == target_user.id, Order.order_date == payload.order_date).all()
 
 
 @router.post("/send-order-summary")

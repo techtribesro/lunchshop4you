@@ -128,6 +128,7 @@ def order_page(
             "cutoff_state": _cutoff_state(is_weekday),
             "cutoff_time": settings.order_cutoff_time,
             "today_iso": today.isoformat(),
+            "week_start_iso": ws.isoformat(),
             "early_label": early_label,
             "early_iso": early_date.isoformat() if early_label else None,
             "early_existing_orders": early_existing_orders,

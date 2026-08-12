@@ -87,3 +87,9 @@ class AdminCaloriesEntry(BaseModel):
 
 class AdminSetCaloriesRequest(BaseModel):
     items: list[AdminCaloriesEntry]
+
+
+class AdminAssignOrderRequest(BaseModel):
+    username: str
+    order_date: date
+    items: list[OrderLineIn]
