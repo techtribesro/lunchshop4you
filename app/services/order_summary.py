@@ -1,7 +1,7 @@
 """Sends the day's lunch order to the restaurant by email, shortly after the
-11:30 cutoff (see app.services.scheduler). Builds an HTML table rather than
-an .xlsx attachment -- readable directly in the inbox, no dependency on a
-spreadsheet library.
+order cutoff (see app.services.scheduler, ORDER_CUTOFF_TIME). Builds an HTML
+table rather than an .xlsx attachment -- readable directly in the inbox, no
+dependency on a spreadsheet library.
 """
 
 import logging
@@ -140,7 +140,9 @@ def send_daily_order_summary(db: Session, order_date: date | None = None) -> int
         return 0
 
     message = MIMEMultipart("alternative")
-    message["Subject"] = f"Objednávka obědů – {_format_date_cz(order_date)}"
+    message["Subject"] = (
+        f"{settings.order_summary_sender_name} – Objednávka obědů – {_format_date_cz(order_date)}"
+    )
     message["From"] = f"{settings.order_summary_sender_name} <{settings.gmail_imap_user}>"
     message["To"] = settings.order_summary_recipient_email
     message.attach(MIMEText(_build_text(order_date, rows, EMAIL_COPY), "plain", "utf-8"))

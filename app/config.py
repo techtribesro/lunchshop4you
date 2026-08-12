@@ -18,8 +18,8 @@ class Settings(BaseSettings):
 
     order_summary_recipient_email: str = ""
     order_summary_recipient_name: str = "Honza"
-    order_summary_sender_name: str = "Lunchshop4you"
-    order_summary_send_time: str = "11:35"
+    order_summary_sender_name: str = "golfshop4you"
+    order_summary_send_time: str = "11:05"
 
     google_service_account_json: str = "./secrets/service-account.json"
     google_sheets_spreadsheet_id: str = ""
@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     admin_username: str = ""
     admin_password: str = ""
 
-    order_cutoff_time: str = "11:30"
+    order_cutoff_time: str = "11:00"
 
     timezone: str = "Europe/Prague"
 

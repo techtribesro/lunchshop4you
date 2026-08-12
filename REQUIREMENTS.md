@@ -45,7 +45,7 @@ instead of JWT**.
   cibule"), up to 255 characters.
 - Submitting **replaces** that user's order for that date in full (delete-then-insert) —
   latest submission wins, no edit history.
-- **Cutoff:** 11:30 CET/CEST, configurable via `ORDER_CUTOFF_TIME`. The UI shows a
+- **Cutoff:** 11:00 CET/CEST, configurable via `ORDER_CUTOFF_TIME`. The UI shows a
   live "open / closing soon (≤15 min) / closed" pill. The server independently enforces
   the same cutoff — the client-side state is UI-only.
 - **Early ordering:** an admin can open ordering for the *next business day* ahead of its
@@ -179,10 +179,14 @@ purely so the data is human-browsable/auditable outside the app.
 
 ### Outbound: daily order summary (Gmail SMTP)
 
-- Sent Mon–Fri shortly after cutoff, `ORDER_SUMMARY_SEND_TIME` (default 11:35, a few
-  minutes after the 11:30 cutoff to let last-second edits settle).
+- Sent Mon–Fri shortly after cutoff, `ORDER_SUMMARY_SEND_TIME` (default 11:05, five
+  minutes after the 11:00 cutoff to let last-second edits settle).
 - Recipient: `ORDER_SUMMARY_RECIPIENT_EMAIL` / `ORDER_SUMMARY_RECIPIENT_NAME` (the
-  restaurant contact, "Honza"). Sender display name: `ORDER_SUMMARY_SENDER_NAME`.
+  restaurant contact, "Honza"). Sent from the app's single Gmail account
+  (`GMAIL_IMAP_USER`, also used for inbound menu polling), with the display name set by
+  `ORDER_SUMMARY_SENDER_NAME` (default "golfshop4you") — used both in the `From` header,
+  the subject line (`golfshop4you – Objednávka obědů – <date>`), and the closing
+  "Děkujeme," sign-off.
 - Body is a **single** HTML table, one row per dish, columns: Jídlo (dish), Počet
   (total quantity), Kdo (each buyer with their quantity, e.g. "Yakob ×2, Toan ×1"),
   Poznámky (per-item notes, e.g. allergies/exclusions — rendered in a **red-bordered
@@ -243,7 +247,7 @@ purely so the data is human-browsable/auditable outside the app.
 
 ## Constraints & Decisions
 
-- **11:30 CET/CEST hard cutoff**, enforced server-side; UI cutoff pill is advisory only.
+- **11:00 CET/CEST hard cutoff**, enforced server-side; UI cutoff pill is advisory only.
 - **No payment processing** — prices are for tracking/billing the office, not charged
   in-app.
 - **Plain-text/PDF email parsing**, no assumption of consistent HTML structure from the

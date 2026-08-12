@@ -4,19 +4,19 @@ from zoneinfo import ZoneInfo
 from app.timezone import PRAGUE, is_before_cutoff, month_start, week_start
 
 
-def test_is_before_cutoff_true_before_1130():
-    moment = datetime(2026, 8, 11, 11, 29, tzinfo=PRAGUE)
+def test_is_before_cutoff_true_before_1100():
+    moment = datetime(2026, 8, 11, 10, 59, tzinfo=PRAGUE)
     assert is_before_cutoff(moment) is True
 
 
-def test_is_before_cutoff_false_at_or_after_1130():
-    moment = datetime(2026, 8, 11, 11, 30, tzinfo=PRAGUE)
+def test_is_before_cutoff_false_at_or_after_1100():
+    moment = datetime(2026, 8, 11, 11, 0, tzinfo=PRAGUE)
     assert is_before_cutoff(moment) is False
 
 
 def test_is_before_cutoff_handles_other_timezones():
-    # 09:35 UTC == 11:35 CEST (Prague, summer) -- past cutoff
-    moment = datetime(2026, 8, 11, 9, 35, tzinfo=ZoneInfo("UTC"))
+    # 09:05 UTC == 11:05 CEST (Prague, summer) -- past cutoff
+    moment = datetime(2026, 8, 11, 9, 5, tzinfo=ZoneInfo("UTC"))
     assert is_before_cutoff(moment) is False
 
 
