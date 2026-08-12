@@ -9,7 +9,7 @@ from app.config import settings
 from app.models import MenuItem
 from app.services.calorie_estimator import estimate_calories
 from app.services.gemini_extractor import GeminiExtractionError, extract_menu_with_gemini
-from app.services.menu_parser import parse_menu_email
+from app.services.menu_parser import MenuParseError, parse_menu_email
 from app.timezone import now_local_naive, week_start
 
 logger = logging.getLogger("email_poller")
@@ -121,7 +121,10 @@ def refresh_menu(db: Session) -> int:
         except GeminiExtractionError as exc:
             raise EmailPollError(f"Gemini menu extraction failed: {exc}") from exc
     else:
-        parsed_items = parse_menu_email(payload)
+        try:
+            parsed_items = parse_menu_email(payload)
+        except MenuParseError as exc:
+            raise EmailPollError(f"Menu text parsing failed: {exc}") from exc
         calories_by_name = estimate_calories(parsed_items)
         for item in parsed_items:
             item.calories_kcal = calories_by_name.get(item.item_name)

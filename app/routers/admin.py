@@ -78,6 +78,24 @@ def set_menu_calories(
     return {"items_updated": updated}
 
 
+@router.post("/menu/apply-non-soup-discount")
+def apply_non_soup_discount(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """One-time backfill for menu rows stored before the standing 50 CZK
+    non-soup discount (see email_poller.NON_SOUP_DISCOUNT_CZK) was applied
+    automatically at parse time. Not idempotent -- calling this twice on
+    the same rows double-discounts them."""
+    current_week = week_start()
+    items = db.query(MenuItem).filter(MenuItem.week_start == current_week, MenuItem.category != "Polévka").all()
+    for item in items:
+        item.price_czk = max(item.price_czk - 50, 0)
+    db.commit()
+    sync_all(db)
+    return {"items_updated": len(items)}
+
+
 @router.get("/orders", response_model=list[OrderLineOut])
 def get_assigned_order(
     username: str,
