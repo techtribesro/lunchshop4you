@@ -749,6 +749,18 @@
           row.appendChild(stepper);
 
           card.appendChild(row);
+
+          if (qty > 0) {
+            const noteRow = document.createElement("div");
+            noteRow.className = "note-row";
+            const noteValue = assignCart[it.name]?.note || "";
+            noteRow.innerHTML = `<input type="text" class="note-input" placeholder="Poznámka (nepovinné) – např. bez cibule" value="${noteValue.replace(/"/g, "&quot;")}" />`;
+            noteRow.querySelector(".note-input").addEventListener("input", (e) => {
+              if (assignCart[it.name]) assignCart[it.name].note = e.target.value;
+            });
+            card.appendChild(noteRow);
+          }
+
           block.appendChild(card);
         });
         list.appendChild(block);
