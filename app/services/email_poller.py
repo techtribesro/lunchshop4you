@@ -17,6 +17,11 @@ logger = logging.getLogger("email_poller")
 # How many of the most recent inbox messages to scan for a menu attachment.
 MAX_MESSAGES_TO_SCAN = 20
 
+# The office has a standing 50 CZK discount off every dish except soup
+# (soup is priced too low for the discount to make sense against it).
+NON_SOUP_DISCOUNT_CZK = 50
+SOUP_CATEGORY = "Polévka"
+
 
 class EmailPollError(Exception):
     pass
@@ -105,7 +110,9 @@ def refresh_menu(db: Session) -> int:
     Gemini directly (see gemini_extractor), which estimates calories in the
     same call -- one Gemini request instead of two, which matters on the
     20-req/day free tier. The plain-text fallback path has no Gemini call
-    to piggyback on, so it estimates calories separately."""
+    to piggyback on, so it estimates calories separately. Prices are then
+    adjusted for the office's standing non-soup discount (see
+    NON_SOUP_DISCOUNT_CZK)."""
     kind, payload = fetch_latest_menu_source()
 
     if kind == "pdf":
@@ -118,6 +125,10 @@ def refresh_menu(db: Session) -> int:
         calories_by_name = estimate_calories(parsed_items)
         for item in parsed_items:
             item.calories_kcal = calories_by_name.get(item.item_name)
+
+    for item in parsed_items:
+        if item.category != SOUP_CATEGORY:
+            item.price_czk = max(item.price_czk - NON_SOUP_DISCOUNT_CZK, 0)
 
     current_week = week_start()
     parsed_at = now_local_naive()
