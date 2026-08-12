@@ -29,6 +29,10 @@ instead of JWT**.
   there's no PDF call to piggyback on.
 - Categories: Polévka (soup), Hlavní jídlo 1–3 (mains), Vege. jídlo (vegetarian). Not
   every day has every category.
+- **Standing discount:** the office has a negotiated 50 CZK discount off every dish
+  except soup. Applied automatically to `price_czk` at parse time
+  (`email_poller.NON_SOUP_DISCOUNT_CZK`), for both the PDF and text-fallback paths, so
+  it's in effect on every future parse without manual intervention.
 - Each new parse **replaces the current week's menu** (delete + bulk insert), keyed by
   `week_start`.
 - An admin can also trigger a re-parse on demand (`POST /admin/parse-menu`), or wipe the
@@ -112,6 +116,12 @@ Gated by `is_admin` (`require_admin` dependency, 403 otherwise). Available actio
   every row is `null`), or when quota is tight and rough hand-entered estimates are good
   enough for the day — no Gemini call spent, and the next scheduled/triggered re-parse
   overwrites these with real Gemini estimates anyway.
+- **Manual price backfill:** `POST /admin/menu/prices` is the equivalent for
+  `price_czk` — sets absolute prices for specific (day, item_name) rows. Deliberately
+  absolute rather than relative/incremental: an earlier relative "subtract 50" version
+  compounded every time it was retried after an apparent failure and zeroed out a
+  week's prices in production (see §9) — an idempotent "set to X" endpoint can't repeat
+  that failure mode.
 
 ## 7. Authentication Architecture Note
 
@@ -125,8 +135,8 @@ cleanly without extra bookkeeping that ends up being a session table anyway.
 ## Non-Functional Requirements
 
 - **Users:** 6–7 concurrent.
-- **Hosting:** Fly.io, region `fra`, shared-cpu-1x, **256 MB RAM** — confirmed
-  sufficient after removing the pdfplumber-based PDF fallback (see §9).
+- **Hosting:** Fly.io, region `fra`, shared-cpu-1x, **512 MB RAM** (see §9 — bumped back
+  up after a second OOM incident; 256 MB is not currently reliable).
 - **Timezone:** Europe/Prague for all scheduling and cutoff logic.
 - **Uptime:** best-effort; single always-on machine, no HA.
 
@@ -245,6 +255,8 @@ purely so the data is human-browsable/auditable outside the app.
 - `POST /admin/users/{username}/toggle-admin`
 - `POST /admin/menu/calories` — manually set kcal for specific current-week menu items
   (see §6)
+- `POST /admin/menu/prices` — manually set absolute prices for specific current-week
+  menu items (see §6)
 - `GET /admin/orders` — look up a specific user's order for a given date (`username`,
   `order_date` query params)
 - `POST /admin/orders` — set (replace) a user's order for a given date on their behalf,
@@ -276,7 +288,7 @@ purely so the data is human-browsable/auditable outside the app.
 ## Infrastructure
 
 ### Hosting: Fly.io
-- App `lunchshop4you`, region `fra`, `shared-cpu-1x`, **256 MB RAM**.
+- App `lunchshop4you`, region `fra`, `shared-cpu-1x`, **512 MB RAM**.
 - Persistent volume `lunchshop_data` mounted at `/data` for the SQLite file.
 - `min_machines_running = 1`, `auto_stop_machines = false` — always-on, no cold starts.
 - Secrets requiring inline JSON (`GOOGLE_SERVICE_ACCOUNT_JSON`) or other credentials
@@ -320,3 +332,17 @@ provenance for anyone reading the code later:
 - **Wordmark rendering as "Ob ěd"**: `.wordmark`/`.login-mark` used a flex `gap` between
   a styled `<span>` and adjacent bare text; browsers wrap bare text in an anonymous flex
   item, so `gap` inserted unwanted space between them. Fixed by zeroing the gap.
+- **Second OOM incident, and why prices briefly showed as 0 CZK (2026-08-12)**: hitting
+  any admin write endpoint that calls `sync_all()` (Google Sheets sync) OOM-killed the
+  256 MB machine partway through the Sheets client's import, dropping the HTTP response
+  (502) *after* the DB write had already committed. A relative-adjustment endpoint
+  (`price -= 50`, meant to backfill the non-soup discount onto already-stored rows) was
+  retried several times against what looked like repeated failures, compounding the
+  subtraction each time until every non-soup price hit 0. Fixed on three levels: (1)
+  memory bumped back to 512 MB, (2) the endpoint replaced with an idempotent absolute
+  setter (`POST /admin/menu/prices`, see §6) so retries can't compound, (3) `sync_all()`
+  failures in admin endpoints are now caught and logged rather than allowed to make a
+  successful write look like a failure to the caller (doesn't help against the process
+  being OOM-killed outright, but does for ordinary Sheets API errors). No order data was
+  affected — orders store a price snapshot at submission time
+  (`Order.unit_price_czk`), and none were placed during the incident window.
