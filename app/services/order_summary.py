@@ -6,7 +6,6 @@ dependency on a spreadsheet library.
 
 import logging
 import smtplib
-from collections import defaultdict
 from datetime import date
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -15,19 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Order, User
+from app.services.order_formatting import format_date_cz, group_by_item
+from app.services.telegram_notify import TelegramError, send_daily_order_telegram
 from app.timezone import today_local
 
 logger = logging.getLogger("order_summary")
-
-DAY_NAMES_CZ = {
-    0: "pondělí",
-    1: "úterý",
-    2: "středa",
-    3: "čtvrtek",
-    4: "pátek",
-    5: "sobota",
-    6: "neděle",
-}
 
 # Static rather than Gemini-generated: this email sends automatically every
 # weekday, and the free-tier Gemini quota (20 requests/day, shared with menu
@@ -46,23 +37,8 @@ class OrderSummaryError(Exception):
     pass
 
 
-def _format_date_cz(d: date) -> str:
-    return f"{DAY_NAMES_CZ[d.weekday()]} {d.day}. {d.month}. {d.year}"
-
-
-def _group_by_item(rows: list[tuple[str, Order]]) -> dict[str, dict]:
-    per_item: dict[str, dict] = defaultdict(lambda: {"qty": 0, "buyers": [], "notes": []})
-    for username, order in rows:
-        entry = per_item[order.item_name]
-        entry["qty"] += order.quantity
-        entry["buyers"].append(f"{username} ×{order.quantity}")
-        if order.note:
-            entry["notes"].append(f"{order.note} ({username})")
-    return per_item
-
-
 def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str, str]) -> str:
-    per_item = _group_by_item(rows)
+    per_item = group_by_item(rows)
 
     def notes_cell(notes: list[str]) -> str:
         if not notes:
@@ -105,7 +81,7 @@ def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str,
 
 
 def _build_text(order_date: date, rows: list[tuple[str, Order]], copy: dict[str, str]) -> str:
-    per_item = _group_by_item(rows)
+    per_item = group_by_item(rows)
 
     lines = [copy["greeting"], "", copy["intro"], ""]
     for item_name, data in per_item.items():
@@ -141,7 +117,7 @@ def send_daily_order_summary(db: Session, order_date: date | None = None) -> int
 
     message = MIMEMultipart("alternative")
     message["Subject"] = (
-        f"{settings.order_summary_sender_name} – Objednávka obědů – {_format_date_cz(order_date)}"
+        f"{settings.order_summary_sender_name} – Objednávka obědů – {format_date_cz(order_date)}"
     )
     message["From"] = f"{settings.order_summary_sender_name} <{settings.gmail_imap_user}>"
     message["To"] = settings.order_summary_recipient_email
@@ -157,4 +133,10 @@ def send_daily_order_summary(db: Session, order_date: date | None = None) -> int
         raise OrderSummaryError(f"Failed to send order summary email: {exc}") from exc
 
     logger.info("Order summary sent for %s: %d line(s) to %s", order_date, len(rows), settings.order_summary_recipient_email)
+
+    try:
+        send_daily_order_telegram(order_date, rows)
+    except TelegramError:
+        logger.exception("Telegram notification failed; email already sent successfully, continuing")
+
     return len(rows)

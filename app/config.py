@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     google_service_account_json: str = "./secrets/service-account.json"
     google_sheets_spreadsheet_id: str = ""
 
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
     gemini_api_key: str = ""
 
     session_secret: str = "change-me"
