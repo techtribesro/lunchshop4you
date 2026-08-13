@@ -11,12 +11,13 @@ import logging
 import ssl
 import urllib.error
 import urllib.request
+from collections import defaultdict
 
 import certifi
 
 from app.config import settings
 from app.models import Order
-from app.services.order_formatting import format_date_cz, group_by_item
+from app.services.order_formatting import format_date_cz
 
 logger = logging.getLogger("telegram_notify")
 
@@ -28,17 +29,24 @@ class TelegramError(Exception):
 
 
 def _build_message(order_date, rows: list[tuple[str, Order]]) -> str:
-    per_item = group_by_item(rows)
+    per_user: dict[str, list[Order]] = defaultdict(list)
+    for username, order in rows:
+        per_user[username].append(order)
+
     lines = [
         f"<b>{html.escape(settings.order_summary_sender_name)} – Objednávka obědů</b>",
         html.escape(format_date_cz(order_date)),
         "",
     ]
-    for item_name, data in per_item.items():
-        lines.append(f"• {data['qty']}× {html.escape(item_name)} — {html.escape(', '.join(data['buyers']))}")
-        if data["notes"]:
-            lines.append(f"  ⚠️ {html.escape('; '.join(data['notes']))}")
-    return "\n".join(lines)
+    for username, orders in per_user.items():
+        lines.append(f"<b>{html.escape(username)}</b>")
+        for order in orders:
+            line = f"• {html.escape(order.item_name)} ×{order.quantity}"
+            if order.note:
+                line += f" ⚠️ {html.escape(order.note)}"
+            lines.append(line)
+        lines.append("")
+    return "\n".join(lines).rstrip()
 
 
 def send_daily_order_telegram(order_date, rows: list[tuple[str, Order]]) -> None:
