@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth import sync_env_admin
 from app.db import SessionLocal, init_db
-from app.routers import admin, auth, dashboard, menu, orders, pages
+from app.routers import admin, auth, dashboard, menu, orders, pages, telegram
 from app.services.scheduler import start_scheduler
 
 
@@ -32,6 +32,7 @@ app.include_router(menu.router)
 app.include_router(orders.router)
 app.include_router(dashboard.router)
 app.include_router(admin.router)
+app.include_router(telegram.router)
 app.include_router(pages.router)
 
 

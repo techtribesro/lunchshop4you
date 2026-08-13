@@ -18,8 +18,8 @@ primary_region = "fra"
   ORDER_SUMMARY_RECIPIENT_EMAIL = "Restaurace@fmsczech.com"
   ORDER_SUMMARY_RECIPIENT_NAME = "Honza"
   ORDER_SUMMARY_SENDER_NAME = "golfshop4you"
-  # TELEGRAM_BOT_TOKEN is set via `fly secrets set` (it's a credential).
-  TELEGRAM_CHAT_ID = "1001108305"
+  # TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET are set via
+  # `fly secrets set` (they're credentials).
   ADMIN_USERNAME = "yakob"
   TIMEZONE = "Europe/Prague"
 

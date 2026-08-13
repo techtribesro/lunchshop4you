@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     google_sheets_spreadsheet_id: str = ""
 
     telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
+    telegram_webhook_secret: str = ""
 
     gemini_api_key: str = ""
 

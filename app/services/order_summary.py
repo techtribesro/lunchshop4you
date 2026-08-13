@@ -135,7 +135,7 @@ def send_daily_order_summary(db: Session, order_date: date | None = None) -> int
     logger.info("Order summary sent for %s: %d line(s) to %s", order_date, len(rows), settings.order_summary_recipient_email)
 
     try:
-        send_daily_order_telegram(order_date, rows)
+        send_daily_order_telegram(db, order_date, rows)
     except TelegramError:
         logger.exception("Telegram notification failed; email already sent successfully, continuing")
 

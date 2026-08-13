@@ -1,8 +1,10 @@
-"""Sends the daily order summary to a Telegram chat via the Bot API, as an
-additional best-effort notification alongside the restaurant email (see
-order_summary.py) -- not a replacement. Callers should treat failures here
-as non-fatal: the email is the channel that actually reaches the
-restaurant, Telegram is a convenience notification on top of it.
+"""Sends the daily order summary to every subscribed Telegram chat via the
+Bot API, as an additional best-effort notification alongside the
+restaurant email (see order_summary.py) -- not a replacement. Anyone who
+messages the bot is auto-subscribed (see app.routers.telegram), so if the
+restaurant email doesn't land, anyone on the broadcast list can forward
+the message manually. Failures here are non-fatal: the email is the
+channel that actually reaches the restaurant.
 """
 
 import html
@@ -14,9 +16,10 @@ import urllib.request
 from collections import defaultdict
 
 import certifi
+from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Order
+from app.models import Order, TelegramSubscriber
 from app.services.order_formatting import format_date_cz
 
 logger = logging.getLogger("telegram_notify")
@@ -49,20 +52,11 @@ def _build_message(order_date, rows: list[tuple[str, Order]]) -> str:
     return "\n".join(lines).rstrip()
 
 
-def send_daily_order_telegram(order_date, rows: list[tuple[str, Order]]) -> None:
-    """No-ops quietly if Telegram isn't configured -- this channel is
-    optional, unlike the email which raises OrderSummaryError."""
-    if not settings.telegram_bot_token or not settings.telegram_chat_id:
-        return
+def send_telegram_message(chat_id: str, text: str) -> None:
+    if not settings.telegram_bot_token:
+        raise TelegramError("TELEGRAM_BOT_TOKEN is not configured")
 
-    body = json.dumps(
-        {
-            "chat_id": settings.telegram_chat_id,
-            "text": _build_message(order_date, rows),
-            "parse_mode": "HTML",
-        }
-    ).encode("utf-8")
-
+    body = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
     request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
     try:
@@ -73,3 +67,21 @@ def send_daily_order_telegram(order_date, rows: list[tuple[str, Order]]) -> None
 
     if not payload.get("ok"):
         raise TelegramError(f"Telegram API error: {payload}")
+
+
+def send_daily_order_telegram(db: Session, order_date, rows: list[tuple[str, Order]]) -> None:
+    """No-ops quietly if Telegram isn't configured or nobody has
+    subscribed yet -- this channel is optional, unlike the email which
+    raises OrderSummaryError."""
+    if not settings.telegram_bot_token:
+        return
+    subscribers = db.query(TelegramSubscriber).all()
+    if not subscribers:
+        return
+
+    text = _build_message(order_date, rows)
+    for sub in subscribers:
+        try:
+            send_telegram_message(sub.chat_id, text)
+        except TelegramError:
+            logger.exception("Telegram send failed for %s (chat_id=%s)", sub.display_name, sub.chat_id)

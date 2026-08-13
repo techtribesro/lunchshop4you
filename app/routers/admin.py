@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import hash_password, require_admin
 from app.db import get_db
-from app.models import EarlyOrderingWindow, MenuItem, Order, User
+from app.models import EarlyOrderingWindow, MenuItem, Order, TelegramSubscriber, User
 from app.schemas import (
     AdminAssignOrderRequest,
     AdminCreateUserRequest,
@@ -15,6 +15,7 @@ from app.schemas import (
     AdminSetPricesRequest,
     AdminUserOut,
     OrderLineOut,
+    TelegramSubscriberOut,
 )
 from app.services.email_poller import EmailPollError, refresh_menu
 from app.services.order_summary import OrderSummaryError, send_daily_order_summary
@@ -322,3 +323,22 @@ def toggle_admin(
     user.is_admin = not user.is_admin
     db.commit()
     return user
+
+
+@router.get("/telegram-subscribers", response_model=list[TelegramSubscriberOut])
+def list_telegram_subscribers(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    return db.query(TelegramSubscriber).order_by(TelegramSubscriber.subscribed_at).all()
+
+
+@router.delete("/telegram-subscribers/{chat_id}")
+def remove_telegram_subscriber(
+    chat_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    deleted = db.query(TelegramSubscriber).filter(TelegramSubscriber.chat_id == chat_id).delete()
+    db.commit()
+    return {"removed": bool(deleted)}

@@ -67,6 +67,20 @@ class Order(Base):
     user: Mapped["User"] = relationship(back_populates="orders")
 
 
+class TelegramSubscriber(Base):
+    """Anyone who has messaged the Telegram bot -- registered automatically
+    by the webhook (see app.routers.telegram). Every subscriber gets the
+    daily order broadcast, so if the restaurant email doesn't land, anyone
+    on this list can forward the message manually."""
+
+    __tablename__ = "telegram_subscribers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chat_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(128), default="")
+    subscribed_at: Mapped[datetime] = mapped_column(DateTime, default=now_local_naive)
+
+
 class EarlyOrderingWindow(Base):
     """A date an admin has manually opened for ordering ahead of time,
     bypassing the normal "must be today, before cutoff" rule -- e.g.

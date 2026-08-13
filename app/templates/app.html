@@ -208,6 +208,26 @@
       </div>
 
       <div class="admin-card">
+        <h3 class="admin-card-title">Telegram odběratelé</h3>
+        <p class="status-note" style="margin-bottom:12px;">
+          Kdokoli napíše botovi <strong>@lunchshop4you_bot</strong> na Telegramu, dostane
+          denní objednávku automaticky spolu s e-mailem pro restauraci.
+        </p>
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Jméno</th>
+                <th>Přihlášen</th>
+                <th class="num">Akce</th>
+              </tr>
+            </thead>
+            <tbody id="telegram-subscribers-body"><!-- rows injected by JS --></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-card">
         <h3 class="admin-card-title">Přiřadit jídlo uživateli</h3>
         <div class="admin-actions" style="margin-bottom:16px;">
           <div class="field" style="margin-bottom:0;">
@@ -568,6 +588,7 @@
           });
         }
         if (target === "admin" && typeof refreshEarlyOrdering === "function") refreshEarlyOrdering();
+        if (target === "admin" && typeof refreshTelegramSubscribers === "function") refreshTelegramSubscribers();
       });
     });
 
@@ -799,6 +820,35 @@
         statusEl.className = "submit-status error";
       }
     });
+
+    // ---- Admin: Telegram subscribers ----
+    async function refreshTelegramSubscribers() {
+      const resp = await fetch("/admin/telegram-subscribers");
+      if (!resp.ok) return;
+      const subs = await resp.json();
+      const body = document.getElementById("telegram-subscribers-body");
+      if (subs.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" class="items-note">Zatím nikdo nenapsal botovi.</td></tr>';
+        return;
+      }
+      body.innerHTML = subs.map(s => `
+        <tr>
+          <td>${s.display_name}</td>
+          <td>${new Date(s.subscribed_at).toLocaleDateString("cs-CZ")}</td>
+          <td class="num">
+            <button type="button" class="chip-btn danger" data-chat-id="${s.chat_id}">Odebrat</button>
+          </td>
+        </tr>`).join("");
+
+      body.querySelectorAll("[data-chat-id]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if (!confirm(`Odebrat ${btn.closest("tr").querySelector("td").textContent} z odběru?`)) return;
+          const resp = await fetch(`/admin/telegram-subscribers/${encodeURIComponent(btn.dataset.chatId)}`, { method: "DELETE" });
+          if (resp.ok) refreshTelegramSubscribers();
+          else alert("Nepodařilo se odebrat odběratele.");
+        });
+      });
+    }
 
     async function refreshEarlyOrdering() {
       const resp = await fetch("/admin/early-ordering");
