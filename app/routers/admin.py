@@ -194,6 +194,19 @@ def assign_order(
     return db.query(Order).filter(Order.user_id == target_user.id, Order.order_date == payload.order_date).all()
 
 
+@router.delete("/orders/by-date")
+def clear_orders_for_date(
+    order_date: date,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Wipes every user's order for a given date -- for clearing out test/junk
+    data, independent of the normal per-user order flow."""
+    deleted = db.query(Order).filter(Order.order_date == order_date).delete()
+    db.commit()
+    return {"orders_deleted": deleted}
+
+
 @router.post("/send-order-summary")
 def send_order_summary(
     db: Session = Depends(get_db),
