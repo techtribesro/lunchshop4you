@@ -219,6 +219,25 @@ purely so the data is human-browsable/auditable outside the app.
   recipient name is fixed per deployment, so it only has to read right once.
 - Also triggerable on demand from the admin panel.
 
+### Additional: Telegram broadcast
+
+- Fires immediately after the email succeeds, as an **additional** channel — not a
+  replacement. If the restaurant email doesn't land for some reason, anyone subscribed
+  can copy-paste the Telegram message and forward it to Honza manually.
+- Bot: `@lunchshop4you_bot`. Anyone who messages it is auto-subscribed via a webhook
+  (`POST /telegram/webhook`, validated against `TELEGRAM_WEBHOOK_SECRET`) — no manual
+  chat-ID lookup needed; the bot replies with a confirmation and adds them to the
+  `telegram_subscribers` table. The daily broadcast goes to everyone in that table,
+  grouped by person (name, then their item/qty lines) rather than by dish — read better
+  on a phone than the per-dish table used in the email.
+- Admin panel has a "Telegram odběratelé" card to view/remove subscribers.
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` are Fly secrets, not plain
+  `fly.toml` env vars (they're credentials — same treatment as
+  `GOOGLE_SERVICE_ACCOUNT_JSON`).
+- Failures here are logged and swallowed, never allowed to affect the email path or the
+  caller's response — see `_sync_all_best_effort`-style pattern used elsewhere in
+  `admin.py` for the same reasoning.
+
 ---
 
 ## API/Endpoints
@@ -261,6 +280,15 @@ purely so the data is human-browsable/auditable outside the app.
   `order_date` query params)
 - `POST /admin/orders` — set (replace) a user's order for a given date on their behalf,
   bypassing cutoff (see §5)
+- `DELETE /admin/orders/by-date` — wipe every user's order for a given date (`order_date`
+  query param) — for clearing out test/junk data
+- `GET /admin/telegram-subscribers` — list everyone subscribed to the Telegram broadcast
+- `DELETE /admin/telegram-subscribers/{chat_id}` — remove a subscriber
+
+### Telegram
+- `POST /telegram/webhook` — Telegram calls this on every message to the bot; not
+  admin-gated (it's called by Telegram, not a logged-in user), validated instead via the
+  `X-Telegram-Bot-Api-Secret-Token` header against `TELEGRAM_WEBHOOK_SECRET`
 
 ### Ops
 - `GET /health`
