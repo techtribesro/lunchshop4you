@@ -37,6 +37,17 @@ class OrderSummaryError(Exception):
     pass
 
 
+def _fetch_order_rows(db: Session, order_date: date) -> list[tuple[str, Order]]:
+    orders = (
+        db.query(Order, User.username)
+        .join(User, User.id == Order.user_id)
+        .filter(Order.order_date == order_date)
+        .order_by(User.username, Order.item_name)
+        .all()
+    )
+    return [(username, order) for order, username in orders]
+
+
 def _build_html(order_date: date, rows: list[tuple[str, Order]], copy: dict[str, str]) -> str:
     per_item = group_by_item(rows)
 
@@ -92,51 +103,75 @@ def _build_text(order_date: date, rows: list[tuple[str, Order]], copy: dict[str,
 
 
 def send_daily_order_summary(db: Session, order_date: date | None = None) -> int:
-    """Emails today's order to settings.order_summary_recipient_email.
-    Returns the number of order lines included (0 if nothing was sent,
-    either because there were no orders or the recipient isn't configured)."""
+    """Sends today's order via whichever channels are enabled: email to
+    settings.order_summary_recipient_email (unless disabled via
+    ORDER_SUMMARY_EMAIL_ENABLED=false) and/or Telegram. The two are
+    independent -- Telegram still fires even if email is disabled or
+    fails, since it's meant as a fallback delivery path, not something
+    conditional on the email succeeding first. Returns the number of
+    order lines included (0 if there were no orders)."""
     order_date = order_date or today_local()
 
-    if not settings.order_summary_recipient_email:
-        raise OrderSummaryError("ORDER_SUMMARY_RECIPIENT_EMAIL is not configured")
-    if not settings.gmail_imap_user or not settings.gmail_imap_password:
-        raise OrderSummaryError("Gmail credentials are not configured")
-
-    orders = (
-        db.query(Order, User.username)
-        .join(User, User.id == Order.user_id)
-        .filter(Order.order_date == order_date)
-        .order_by(User.username, Order.item_name)
-        .all()
-    )
-    rows = [(username, order) for order, username in orders]
-
+    rows = _fetch_order_rows(db, order_date)
     if not rows:
-        logger.info("No orders for %s; skipping summary email", order_date)
+        logger.info("No orders for %s; skipping summary", order_date)
         return 0
 
-    message = MIMEMultipart("alternative")
-    message["Subject"] = (
-        f"{settings.order_summary_sender_name} – Objednávka obědů – {format_date_cz(order_date)}"
-    )
-    message["From"] = f"{settings.order_summary_sender_name} <{settings.gmail_imap_user}>"
-    message["To"] = settings.order_summary_recipient_email
-    message.attach(MIMEText(_build_text(order_date, rows, EMAIL_COPY), "plain", "utf-8"))
-    message.attach(MIMEText(_build_html(order_date, rows, EMAIL_COPY), "html", "utf-8"))
+    email_error: OrderSummaryError | None = None
 
-    try:
-        with smtplib.SMTP(settings.gmail_smtp_host, settings.gmail_smtp_port, timeout=30) as smtp:
-            smtp.starttls()
-            smtp.login(settings.gmail_imap_user, settings.gmail_imap_password)
-            smtp.sendmail(settings.gmail_imap_user, [settings.order_summary_recipient_email], message.as_string())
-    except smtplib.SMTPException as exc:
-        raise OrderSummaryError(f"Failed to send order summary email: {exc}") from exc
+    if not settings.order_summary_email_enabled:
+        logger.info("Order-summary email disabled (ORDER_SUMMARY_EMAIL_ENABLED=false); skipping")
+    elif not settings.order_summary_recipient_email:
+        email_error = OrderSummaryError("ORDER_SUMMARY_RECIPIENT_EMAIL is not configured")
+    elif not settings.gmail_imap_user or not settings.gmail_imap_password:
+        email_error = OrderSummaryError("Gmail credentials are not configured")
+    else:
+        message = MIMEMultipart("alternative")
+        message["Subject"] = (
+            f"{settings.order_summary_sender_name} – Objednávka obědů – {format_date_cz(order_date)}"
+        )
+        message["From"] = f"{settings.order_summary_sender_name} <{settings.gmail_imap_user}>"
+        message["To"] = settings.order_summary_recipient_email
+        message.attach(MIMEText(_build_text(order_date, rows, EMAIL_COPY), "plain", "utf-8"))
+        message.attach(MIMEText(_build_html(order_date, rows, EMAIL_COPY), "html", "utf-8"))
 
-    logger.info("Order summary sent for %s: %d line(s) to %s", order_date, len(rows), settings.order_summary_recipient_email)
+        try:
+            with smtplib.SMTP(settings.gmail_smtp_host, settings.gmail_smtp_port, timeout=30) as smtp:
+                smtp.starttls()
+                smtp.login(settings.gmail_imap_user, settings.gmail_imap_password)
+                smtp.sendmail(settings.gmail_imap_user, [settings.order_summary_recipient_email], message.as_string())
+            logger.info(
+                "Order summary sent for %s: %d line(s) to %s", order_date, len(rows), settings.order_summary_recipient_email
+            )
+        except smtplib.SMTPException as exc:
+            email_error = OrderSummaryError(f"Failed to send order summary email: {exc}")
 
     try:
         send_daily_order_telegram(db, order_date, rows)
     except TelegramError:
-        logger.exception("Telegram notification failed; email already sent successfully, continuing")
+        logger.exception("Telegram notification failed; continuing")
 
+    if email_error is not None:
+        raise email_error
+
+    return len(rows)
+
+
+def send_telegram_only(db: Session, order_date: date | None = None) -> int:
+    """Fires just the Telegram broadcast, independent of the restaurant
+    email -- for testing the Telegram side on its own, or re-notifying
+    subscribers without re-sending the email. Unlike the best-effort
+    Telegram step inside send_daily_order_summary(), this raises
+    TelegramError on failure since it's the caller's whole point."""
+    order_date = order_date or today_local()
+
+    if not settings.telegram_bot_token:
+        raise TelegramError("TELEGRAM_BOT_TOKEN is not configured")
+
+    rows = _fetch_order_rows(db, order_date)
+    if not rows:
+        logger.info("No orders for %s; skipping Telegram-only send", order_date)
+        return 0
+
+    send_daily_order_telegram(db, order_date, rows)
     return len(rows)

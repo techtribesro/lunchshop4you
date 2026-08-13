@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     gmail_smtp_host: str = "smtp.gmail.com"
     gmail_smtp_port: int = 587
 
+    order_summary_email_enabled: bool = True
     order_summary_recipient_email: str = ""
     order_summary_recipient_name: str = "Honza"
     order_summary_sender_name: str = "golfshop4you"

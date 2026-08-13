@@ -77,6 +77,11 @@ class TelegramSubscriberOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AdminAddTelegramSubscriberRequest(BaseModel):
+    chat_id: str
+    display_name: str = ""
+
+
 class AdminCreateUserRequest(BaseModel):
     username: str
     password: str

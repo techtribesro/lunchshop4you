@@ -8,6 +8,7 @@ from app.auth import hash_password, require_admin
 from app.db import get_db
 from app.models import EarlyOrderingWindow, MenuItem, Order, TelegramSubscriber, User
 from app.schemas import (
+    AdminAddTelegramSubscriberRequest,
     AdminAssignOrderRequest,
     AdminCreateUserRequest,
     AdminResetPasswordRequest,
@@ -18,8 +19,9 @@ from app.schemas import (
     TelegramSubscriberOut,
 )
 from app.services.email_poller import EmailPollError, refresh_menu
-from app.services.order_summary import OrderSummaryError, send_daily_order_summary
+from app.services.order_summary import OrderSummaryError, send_daily_order_summary, send_telegram_only
 from app.services.sheets_sync import sync_all
+from app.services.telegram_notify import TelegramError
 from app.timezone import next_business_day, week_start
 
 logger = logging.getLogger("admin")
@@ -221,6 +223,22 @@ def send_order_summary(
     return {"order_lines_sent": line_count}
 
 
+@router.post("/send-order-telegram")
+def send_order_telegram(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Fires just the Telegram broadcast, independent of the restaurant
+    email -- for testing, or re-notifying subscribers without re-sending
+    the email."""
+    try:
+        line_count = send_telegram_only(db)
+    except TelegramError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+    return {"order_lines_sent": line_count}
+
+
 @router.get("/early-ordering")
 def get_early_ordering_status(
     db: Session = Depends(get_db),
@@ -331,6 +349,25 @@ def list_telegram_subscribers(
     _admin: User = Depends(require_admin),
 ):
     return db.query(TelegramSubscriber).order_by(TelegramSubscriber.subscribed_at).all()
+
+
+@router.post("/telegram-subscribers", response_model=TelegramSubscriberOut)
+def add_telegram_subscriber(
+    payload: AdminAddTelegramSubscriberRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """For adding a subscriber by chat_id directly -- e.g. one already known
+    from an earlier /getUpdates lookup. The normal path is the webhook
+    auto-subscribing whoever messages the bot; this is the manual escape
+    hatch for that."""
+    if db.query(TelegramSubscriber).filter(TelegramSubscriber.chat_id == payload.chat_id).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"chat_id '{payload.chat_id}' is already subscribed")
+
+    subscriber = TelegramSubscriber(chat_id=payload.chat_id, display_name=payload.display_name or payload.chat_id)
+    db.add(subscriber)
+    db.commit()
+    return subscriber
 
 
 @router.delete("/telegram-subscribers/{chat_id}")
