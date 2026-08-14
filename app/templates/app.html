@@ -201,6 +201,9 @@
         <h3 class="admin-card-title">Menu a objednávka</h3>
         <div class="admin-actions">
           <button class="btn-primary" type="button" id="admin-parse-menu">Načíst menu z e-mailu</button>
+          <label class="admin-checkbox">
+            <input type="checkbox" id="admin-parse-next-week" /> pro příští týden
+          </label>
           <button class="btn-primary btn-danger" type="button" id="admin-clear-menu">Vynutit smazání menu (tento týden)</button>
           <button class="btn-primary" type="button" id="admin-send-summary">Odeslat dnešní objednávku</button>
           <button class="btn-primary" type="button" id="admin-send-telegram">Odeslat jen Telegram</button>
@@ -926,12 +929,13 @@
 
     document.getElementById("admin-parse-menu").addEventListener("click", async () => {
       const statusEl = document.getElementById("admin-action-status");
+      const forNextWeek = document.getElementById("admin-parse-next-week").checked;
       statusEl.textContent = "Načítám...";
       statusEl.className = "submit-status";
-      const resp = await fetch("/admin/parse-menu", { method: "POST" });
+      const resp = await fetch(`/admin/parse-menu?for_next_week=${forNextWeek}`, { method: "POST" });
       const body = await resp.json().catch(() => ({}));
       if (resp.ok) {
-        statusEl.textContent = `Menu načteno: ${body.items_parsed} položek.`;
+        statusEl.textContent = `Menu načteno pro týden ${body.week_start}: ${body.items_parsed} položek.`;
         statusEl.className = "submit-status ok";
       } else {
         statusEl.textContent = body.detail || "Načtení menu se nezdařilo.";

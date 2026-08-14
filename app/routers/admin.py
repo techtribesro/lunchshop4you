@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -46,16 +46,22 @@ def _sync_all_best_effort(db: Session) -> None:
 
 @router.post("/parse-menu")
 def parse_menu(
+    for_next_week: bool = False,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
+    """for_next_week=True stores the parsed menu under next week's
+    Monday instead of the current week -- for when next week's menu
+    email has already arrived early (mid-week) and you don't want to
+    wait for the normal Sunday-evening poll."""
+    target = week_start() + timedelta(days=7) if for_next_week else None
     try:
-        item_count = refresh_menu(db)
+        item_count = refresh_menu(db, target_week_start=target)
     except EmailPollError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
     _sync_all_best_effort(db)
-    return {"items_parsed": item_count}
+    return {"items_parsed": item_count, "week_start": (target or week_start()).isoformat()}
 
 
 @router.post("/clear-menu")

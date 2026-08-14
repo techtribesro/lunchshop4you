@@ -1,6 +1,7 @@
 import email
 import imaplib
 import logging
+from datetime import date
 from email.header import decode_header
 
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from app.models import MenuItem
 from app.services.calorie_estimator import estimate_calories
 from app.services.gemini_extractor import GeminiExtractionError, extract_menu_with_gemini
 from app.services.menu_parser import MenuParseError, parse_menu_email
-from app.timezone import now_local_naive, week_start
+from app.timezone import menu_target_week_start, now_local_naive
 
 logger = logging.getLogger("email_poller")
 
@@ -104,8 +105,12 @@ def fetch_latest_menu_source() -> tuple[str, bytes | str]:
             pass
 
 
-def refresh_menu(db: Session) -> int:
-    """Fetches, parses, and bulk-replaces the current week's menu.
+def refresh_menu(db: Session, target_week_start: date | None = None) -> int:
+    """Fetches, parses, and bulk-replaces a week's menu. Which week is
+    determined by menu_target_week_start() (current week on a weekday call,
+    upcoming week on a weekend call) unless target_week_start is given
+    explicitly -- e.g. an admin force-parsing a next-week menu that arrived
+    early, mid-week.
     Returns the number of items stored. PDF attachments are parsed by
     Gemini directly (see gemini_extractor), which estimates calories in the
     same call -- one Gemini request instead of two, which matters on the
@@ -133,7 +138,7 @@ def refresh_menu(db: Session) -> int:
         if item.category != SOUP_CATEGORY:
             item.price_czk = max(item.price_czk - NON_SOUP_DISCOUNT_CZK, 0)
 
-    current_week = week_start()
+    current_week = target_week_start or menu_target_week_start()
     parsed_at = now_local_naive()
 
     db.query(MenuItem).filter(MenuItem.week_start == current_week).delete()
