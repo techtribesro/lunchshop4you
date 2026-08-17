@@ -203,20 +203,22 @@ def delete_todays_order_line(
     return {"ok": True}
 
 
-@router.get("/orders", response_model=list[OrderLineOut])
-def get_assigned_order(
+@router.get("/orders/week", response_model=list[OrderLineOut])
+def get_user_week_orders(
     username: str,
-    order_date: date,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
+    """Backs the "Objednávám za" selector on the order screen -- lets an
+    admin load another user's whole current-week cart into the same UI
+    they'd see for their own orders."""
     target_user = db.query(User).filter(User.username == username).first()
     if target_user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{username}' not found")
     return (
         db.query(Order)
-        .filter(Order.user_id == target_user.id, Order.order_date == order_date)
-        .order_by(Order.item_name)
+        .filter(Order.user_id == target_user.id, Order.week_start == week_start())
+        .order_by(Order.order_date, Order.item_name)
         .all()
     )
 

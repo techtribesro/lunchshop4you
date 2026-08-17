@@ -77,8 +77,6 @@
       color: var(--ink);
     }
     .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    #assign-menu-list .item-card { cursor: default; }
-    #assign-menu-list .stepper button { cursor: pointer; }
   </style>
 </head>
 <body>
@@ -99,6 +97,13 @@
 
   <div class="screen active" id="view-order">
     <div class="order-shell">
+      {% if user.is_admin %}
+      <div class="field" style="max-width:280px;margin-bottom:16px;">
+        <label for="acting-as-user">Objednávám za</label>
+        <select id="acting-as-user"><option value="">Já ({{ user.username }})</option></select>
+      </div>
+      {% endif %}
+
       <div class="day-row" id="day-row"><!-- day pills injected by JS --></div>
 
       <div class="order-grid">
@@ -263,25 +268,6 @@
       </div>
 
       <div class="admin-card">
-        <h3 class="admin-card-title">Přiřadit jídlo uživateli</h3>
-        <div class="admin-actions" style="margin-bottom:16px;">
-          <div class="field" style="margin-bottom:0;">
-            <label for="assign-user">Uživatel</label>
-            <select id="assign-user"></select>
-          </div>
-          <div class="field" style="margin-bottom:0;">
-            <label for="assign-day">Den</label>
-            <select id="assign-day"></select>
-          </div>
-        </div>
-        <div id="assign-menu-list"><!-- category blocks injected by JS --></div>
-        <div class="admin-actions" style="margin-top:16px;">
-          <button class="btn-primary" type="button" id="assign-save" style="width:auto;padding:10px 20px;">Uložit objednávku</button>
-          <p class="submit-status" id="assign-status"></p>
-        </div>
-      </div>
-
-      <div class="admin-card">
         <h3 class="admin-card-title">Uživatelé</h3>
         <div class="dash-table-wrap">
           <table class="dash-table">
@@ -339,16 +325,55 @@
 
     // No more day-locking: every weekday in the loaded week has a cart,
     // pre-populated from that day's existing orders.
-    const carts = {}; // dateIso -> { item_name: {price, qty, note, kcal} }
     const ORDERS_BY_DAY = {{ orders_by_day | tojson }};
-    DAYS.forEach(day => {
-      const iso = dateForDay(day);
-      carts[iso] = {};
-      const existing = ORDERS_BY_DAY[day] || {};
-      Object.entries(existing).forEach(([name, entry]) => {
-        carts[iso][name] = { price: entry.price, qty: entry.qty, note: entry.note, kcal: entry.kcal };
+
+    function buildCartsFromDayMap(byDay) {
+      const result = {};
+      DAYS.forEach(day => {
+        const iso = dateForDay(day);
+        result[iso] = {};
+        const existing = byDay[day] || {};
+        Object.entries(existing).forEach(([name, entry]) => {
+          result[iso][name] = { price: entry.price, qty: entry.qty, note: entry.note, kcal: entry.kcal };
+        });
       });
-    });
+      return result;
+    }
+
+    function buildCartsFromOrderList(orderLines) {
+      const result = {};
+      DAYS.forEach(day => { result[dateForDay(day)] = {}; });
+      orderLines.forEach(o => {
+        if (!result[o.order_date]) result[o.order_date] = {};
+        const day = DAYS.find(d => dateForDay(d) === o.order_date);
+        const menuItem = (MENU[day] || []).find(it => it.name === o.item_name);
+        result[o.order_date][o.item_name] = {
+          price: o.unit_price_czk, qty: o.quantity, note: o.note, kcal: menuItem ? menuItem.kcal : null,
+        };
+      });
+      return result;
+    }
+
+    // Admin-only: "Objednávám za" -- carts, cached per acting-as user so
+    // switching back and forth doesn't re-fetch. "" (self) is seeded from
+    // the server-rendered ORDERS_BY_DAY; anyone else is fetched on demand
+    // from /admin/orders/week.
+    let actingAsUser = "";
+    const cartsByUser = { "": buildCartsFromDayMap(ORDERS_BY_DAY) };
+    let carts = cartsByUser[""];
+
+    async function setActingAsUser(username) {
+      actingAsUser = username || "";
+      if (!(actingAsUser in cartsByUser)) {
+        const resp = await fetch(`/admin/orders/week?username=${encodeURIComponent(actingAsUser)}`);
+        cartsByUser[actingAsUser] = resp.ok ? buildCartsFromOrderList(await resp.json()) : buildCartsFromDayMap({});
+      }
+      carts = cartsByUser[actingAsUser];
+      renderDays();
+      renderMenu();
+      renderSummary();
+      updateSubmitState();
+    }
 
     function currentDateIso() { return dateForDay(selectedDay); }
     function currentCart() {
@@ -495,13 +520,17 @@
         statusEl.className = "submit-status error";
         return;
       }
-      const resp = await fetch("/orders", {
+      const url = actingAsUser ? "/admin/orders" : "/orders";
+      const payload = actingAsUser
+        ? { username: actingAsUser, order_date: dateIso, items }
+        : { items, order_date: dateIso };
+      const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, order_date: dateIso }),
+        body: JSON.stringify(payload),
       });
       if (resp.ok) {
-        statusEl.textContent = "Objednávka uložena.";
+        statusEl.textContent = actingAsUser ? `Objednávka uložena pro ${actingAsUser}.` : "Objednávka uložena.";
         statusEl.className = "submit-status ok";
       } else {
         const body = await resp.json().catch(() => ({}));
@@ -592,11 +621,7 @@
         });
         document.querySelectorAll("[data-goto]").forEach(b => b.toggleAttribute("aria-current", b.dataset.goto === target));
         if (target === "dashboard") loadDashboard();
-        if (target === "admin" && typeof refreshAdminUsers === "function") {
-          Promise.resolve(refreshAdminUsers()).then(() => {
-            if (typeof loadAssignOrder === "function") loadAssignOrder();
-          });
-        }
+        if (target === "admin" && typeof refreshAdminUsers === "function") refreshAdminUsers();
         if (target === "admin" && typeof refreshTelegramSubscribers === "function") refreshTelegramSubscribers();
         if (target === "admin" && typeof refreshTodaysOrders === "function") refreshTodaysOrders();
       });
@@ -634,10 +659,7 @@
           </td>
         </tr>`).join("");
 
-      const assignSelect = document.getElementById("assign-user");
-      const prevValue = assignSelect.value;
-      assignSelect.innerHTML = users.map(u => `<option value="${u.username}">${u.username}</option>`).join("");
-      if (users.some(u => u.username === prevValue)) assignSelect.value = prevValue;
+      populateActingAsSelect(users);
 
       body.querySelectorAll('[data-action="reset"]').forEach(btn => {
         btn.addEventListener("click", async () => {
@@ -699,127 +721,6 @@
         statusEl.className = "submit-status ok";
       } else {
         statusEl.textContent = body.detail || "Smazání se nezdařilo.";
-        statusEl.className = "submit-status error";
-      }
-    });
-
-    // ---- Admin: assign a meal to a user ----
-    let assignCart = {}; // item_name -> {price, qty, note}
-
-    function renderAssignDayOptions() {
-      const sel = document.getElementById("assign-day");
-      if (sel.options.length > 0) return;
-      sel.innerHTML = DAYS.map(d => `<option value="${d}">${d}</option>`).join("");
-      sel.value = TODAY || DAYS[0];
-    }
-
-    async function loadAssignOrder() {
-      renderAssignDayOptions();
-      const username = document.getElementById("assign-user").value;
-      const day = document.getElementById("assign-day").value;
-      const list = document.getElementById("assign-menu-list");
-      if (!username || !day) {
-        assignCart = {};
-        list.innerHTML = "";
-        return;
-      }
-      const resp = await fetch(`/admin/orders?username=${encodeURIComponent(username)}&order_date=${dateForDay(day)}`);
-      assignCart = {};
-      if (resp.ok) {
-        const lines = await resp.json();
-        lines.forEach(l => { assignCart[l.item_name] = { price: l.unit_price_czk, qty: l.quantity, note: l.note }; });
-      }
-      renderAssignMenu();
-    }
-
-    function renderAssignMenu() {
-      const list = document.getElementById("assign-menu-list");
-      const day = document.getElementById("assign-day").value;
-      const items = MENU[day] || [];
-      list.innerHTML = "";
-      if (items.length === 0) {
-        list.innerHTML = '<p class="summary-empty">Pro tento den zatím není menu k dispozici.</p>';
-        return;
-      }
-      const byCat = {};
-      items.forEach(it => { (byCat[it.cat] = byCat[it.cat] || []).push(it); });
-
-      Object.keys(byCat).forEach(cat => {
-        const block = document.createElement("div");
-        block.className = "category-block";
-        const title = document.createElement("div");
-        title.className = "category-title";
-        title.textContent = cat;
-        block.appendChild(title);
-
-        byCat[cat].forEach(it => {
-          const qty = assignCart[it.name]?.qty || 0;
-          const card = document.createElement("div");
-          card.className = "item-card" + (qty > 0 ? " is-selected" : "");
-
-          const row = document.createElement("div");
-          row.className = "item-row";
-          const main = document.createElement("div");
-          main.className = "item-main";
-          main.innerHTML = `<span class="item-name">${it.name}</span><span class="item-price tabular">${it.price} Kč</span>` +
-            (it.kcal ? `<span class="item-kcal tabular">${it.kcal} kcal</span>` : "");
-          row.appendChild(main);
-
-          const stepper = document.createElement("div");
-          stepper.className = "stepper";
-          stepper.innerHTML = `<button type="button" data-action="dec">−</button><span class="qty tabular">${qty}</span><button type="button" data-action="inc">+</button>`;
-          stepper.querySelector('[data-action="inc"]').addEventListener("click", () => changeAssignQty(it, 1));
-          stepper.querySelector('[data-action="dec"]').addEventListener("click", () => changeAssignQty(it, -1));
-          row.appendChild(stepper);
-
-          card.appendChild(row);
-
-          if (qty > 0) {
-            const noteRow = document.createElement("div");
-            noteRow.className = "note-row";
-            const noteValue = assignCart[it.name]?.note || "";
-            noteRow.innerHTML = `<input type="text" class="note-input" placeholder="Poznámka (nepovinné) – např. bez cibule" value="${noteValue.replace(/"/g, "&quot;")}" />`;
-            noteRow.querySelector(".note-input").addEventListener("input", (e) => {
-              if (assignCart[it.name]) assignCart[it.name].note = e.target.value;
-            });
-            card.appendChild(noteRow);
-          }
-
-          block.appendChild(card);
-        });
-        list.appendChild(block);
-      });
-    }
-
-    function changeAssignQty(item, delta) {
-      const current = assignCart[item.name]?.qty || 0;
-      const next = Math.max(0, current + delta);
-      const existingNote = assignCart[item.name]?.note || "";
-      if (next === 0) delete assignCart[item.name];
-      else assignCart[item.name] = { price: item.price, qty: next, note: existingNote };
-      renderAssignMenu();
-    }
-
-    document.getElementById("assign-user").addEventListener("change", loadAssignOrder);
-    document.getElementById("assign-day").addEventListener("change", loadAssignOrder);
-
-    document.getElementById("assign-save").addEventListener("click", async () => {
-      const username = document.getElementById("assign-user").value;
-      const day = document.getElementById("assign-day").value;
-      const statusEl = document.getElementById("assign-status");
-      if (!username || !day) return;
-      const items = Object.entries(assignCart).map(([name, e]) => ({ item_name: name, quantity: e.qty, note: e.note || "" }));
-      const resp = await fetch("/admin/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, order_date: dateForDay(day), items }),
-      });
-      if (resp.ok) {
-        statusEl.textContent = `Uloženo pro ${username}.`;
-        statusEl.className = "submit-status ok";
-      } else {
-        const body = await resp.json().catch(() => ({}));
-        statusEl.textContent = body.detail || "Uložení se nezdařilo.";
         statusEl.className = "submit-status error";
       }
     });
@@ -986,6 +887,23 @@
         statusEl.className = "submit-status error";
       }
     });
+
+    function populateActingAsSelect(users) {
+      const sel = document.getElementById("acting-as-user");
+      if (!sel) return;
+      const prevValue = sel.value;
+      sel.innerHTML = `<option value="">Já (${USERNAME})</option>` +
+        users.filter(u => u.username !== USERNAME).map(u => `<option value="${u.username}">${u.username}</option>`).join("");
+      if (users.some(u => u.username === prevValue)) sel.value = prevValue;
+    }
+
+    document.getElementById("acting-as-user").addEventListener("change", (e) => {
+      setActingAsUser(e.target.value);
+    });
+
+    // Populate the acting-as selector immediately (not just when the admin
+    // tab is opened), since it lives on the order screen shown by default.
+    refreshAdminUsers();
   </script>
   {% endif %}
 </body>
