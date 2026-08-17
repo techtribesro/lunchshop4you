@@ -653,6 +653,9 @@
       flex: 1 1 100%;
       width: 100%;
       text-align: center;
+      margin-top: 4px;
+      border-radius: 10px;
+      padding: 12px 20px;
     }
     .link-btn { white-space: nowrap; }
 

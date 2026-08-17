@@ -339,7 +339,14 @@
       const idx = DAYS.indexOf(dayLabel);
       const d = new Date(WEEK_START_ISO + "T00:00:00");
       d.setDate(d.getDate() + idx);
-      return d.toISOString().slice(0, 10);
+      // Local date components, not toISOString() (UTC) -- for any UTC+
+      // timezone (e.g. Prague), round-tripping local midnight through
+      // toISOString() shifts the date back a day, which made "today"
+      // compare as earlier than TODAY_ISO and silently locked editing.
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
     }
 
     let selectedDay = TODAY || DAYS[0];
