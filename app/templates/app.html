@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Oběd</title>
-  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="stylesheet" href="/static/css/app.css?v={{ css_version }}" />
   <style>
     .submit-status { font-size: 12.5px; text-align: center; margin-top: 8px; min-height: 1.2em; }
     .submit-status.ok { color: var(--accent-strong); }
@@ -58,6 +58,42 @@
     .admin-row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .status-note { font-size: 13.5px; color: var(--ink-muted); }
 
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 12, 10, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    .modal-overlay[hidden] { display: none; }
+    .modal-panel {
+      background: var(--surface-raised);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: var(--shadow);
+    }
+    .modal-panel h3 { font-size: 17px; margin: 0 0 10px; }
+    .modal-panel p { font-size: 13.5px; color: var(--ink-muted); margin: 0 0 14px; line-height: 1.5; }
+    .modal-input {
+      width: 100%;
+      font: inherit;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .modal-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
     .field select {
       font: inherit;
       padding: 10px 12px;
@@ -85,6 +121,21 @@
     </div>
     <button class="link-btn" type="button" id="logout-btn">Odhlásit</button>
   </div>
+
+  {% if user.is_admin %}
+  <div class="modal-overlay" id="send-out-modal" hidden>
+    <div class="modal-panel">
+      <h3>Odeslat objednávku restauraci</h3>
+      <p>Tímto se dnešní objednávka odešle e-mailem restauraci a na Telegram všem odběratelům. Pro potvrzení napište <strong>ODESLAT</strong> do pole níže.</p>
+      <input type="text" id="send-out-confirm-input" class="modal-input" autocomplete="off" placeholder="ODESLAT" />
+      <div class="modal-actions">
+        <button type="button" class="chip-btn" id="send-out-cancel">Zrušit</button>
+        <button type="button" class="btn-primary btn-danger" id="send-out-confirm" disabled style="width:auto;padding:10px 20px;">Odeslat</button>
+      </div>
+      <p class="submit-status" id="send-out-modal-status"></p>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="screen active" id="view-order">
     <div class="order-shell">
@@ -632,22 +683,45 @@
     }
 
     const sendOutBtn = document.getElementById("topbar-send-out");
+    const sendOutModal = document.getElementById("send-out-modal");
+    const sendOutInput = document.getElementById("send-out-confirm-input");
+    const sendOutConfirmBtn = document.getElementById("send-out-confirm");
+    const sendOutCancelBtn = document.getElementById("send-out-cancel");
+    const sendOutModalStatus = document.getElementById("send-out-modal-status");
+    const SEND_OUT_PHRASE = "ODESLAT";
+
+    function closeSendOutModal() {
+      sendOutModal.hidden = true;
+      sendOutInput.value = "";
+      sendOutConfirmBtn.disabled = true;
+      sendOutModalStatus.textContent = "";
+    }
+
     if (sendOutBtn) {
-      sendOutBtn.addEventListener("click", async () => {
-        if (!confirm("Odeslat dnešní objednávku restauraci (e-mail + Telegram)?")) return;
-        const originalText = sendOutBtn.textContent;
-        sendOutBtn.disabled = true;
-        sendOutBtn.textContent = "Odesílám...";
+      sendOutBtn.addEventListener("click", () => {
+        sendOutModal.hidden = false;
+        sendOutInput.focus();
+      });
+      sendOutCancelBtn.addEventListener("click", closeSendOutModal);
+      sendOutModal.addEventListener("click", (e) => { if (e.target === sendOutModal) closeSendOutModal(); });
+      sendOutInput.addEventListener("input", () => {
+        sendOutConfirmBtn.disabled = sendOutInput.value.trim().toUpperCase() !== SEND_OUT_PHRASE;
+      });
+      sendOutConfirmBtn.addEventListener("click", async () => {
+        sendOutConfirmBtn.disabled = true;
+        sendOutModalStatus.textContent = "Odesílám...";
+        sendOutModalStatus.className = "submit-status";
         const resp = await fetch("/admin/send-order-summary", { method: "POST" });
         const body = await resp.json().catch(() => ({}));
-        sendOutBtn.disabled = false;
         if (resp.ok) {
-          sendOutBtn.textContent = `Odesláno (${body.order_lines_sent})`;
+          sendOutModalStatus.textContent = `Odesláno (${body.order_lines_sent} položek).`;
+          sendOutModalStatus.className = "submit-status ok";
+          setTimeout(closeSendOutModal, 1500);
         } else {
-          sendOutBtn.textContent = originalText;
-          alert(body.detail || "Odeslání se nezdařilo.");
+          sendOutModalStatus.textContent = body.detail || "Odeslání se nezdařilo.";
+          sendOutModalStatus.className = "submit-status error";
+          sendOutConfirmBtn.disabled = false;
         }
-        setTimeout(() => { sendOutBtn.textContent = originalText; }, 3000);
       });
     }
 

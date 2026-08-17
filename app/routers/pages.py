@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -10,6 +12,13 @@ from app.timezone import today_local, week_start
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
+
+# Cache-busting query param for /static/css/app.css -- StaticFiles doesn't
+# set Cache-Control, so browsers can hang onto a stale copy across deploys
+# unless the URL itself changes. Computed once at startup from the file's
+# mtime, so every deploy (which touches the file) gets a fresh value.
+_CSS_PATH = os.path.join(os.path.dirname(__file__), "..", "static", "css", "app.css")
+CSS_VERSION = str(int(os.path.getmtime(_CSS_PATH)))
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 DAY_LABELS_CZ = {
@@ -25,7 +34,7 @@ DAY_LABELS_CZ = {
 def login_page(request: Request, user: User | None = Depends(get_current_user_optional)):
     if user is not None:
         return RedirectResponse("/orders", status_code=303)
-    return templates.TemplateResponse(request, "login.html", {})
+    return templates.TemplateResponse(request, "login.html", {"css_version": CSS_VERSION})
 
 
 @router.get("/orders")
@@ -93,5 +102,6 @@ def order_page(
             "orders_by_day": orders_by_day,
             "today_iso": today.isoformat(),
             "week_start_iso": ws.isoformat(),
+            "css_version": CSS_VERSION,
         },
     )
