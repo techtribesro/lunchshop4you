@@ -11,9 +11,7 @@ from app.schemas import (
     AdminAddTelegramSubscriberRequest,
     AdminAssignOrderRequest,
     AdminCreateUserRequest,
-    AdminOrderRowOut,
     AdminResetPasswordRequest,
-    AdminUpdateOrderLineRequest,
     AdminSetCaloriesRequest,
     AdminSetPricesRequest,
     AdminUserOut,
@@ -24,7 +22,7 @@ from app.services.email_poller import EmailPollError, refresh_menu
 from app.services.order_summary import OrderSummaryError, send_daily_order_summary, send_telegram_only
 from app.services.sheets_sync import sync_all
 from app.services.telegram_notify import TelegramError
-from app.timezone import today_local, week_start
+from app.timezone import week_start
 
 logger = logging.getLogger("admin")
 
@@ -131,76 +129,6 @@ def set_menu_prices(
     db.commit()
     _sync_all_best_effort(db)
     return {"items_updated": updated}
-
-
-@router.get("/orders/today", response_model=list[AdminOrderRowOut])
-def list_todays_orders(
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_admin),
-):
-    rows = (
-        db.query(Order, User.username)
-        .join(User, User.id == Order.user_id)
-        .filter(Order.order_date == today_local())
-        .order_by(User.username, Order.item_name)
-        .all()
-    )
-    return [
-        {
-            "username": username,
-            "item_name": order.item_name,
-            "quantity": order.quantity,
-            "unit_price_czk": order.unit_price_czk,
-            "note": order.note,
-        }
-        for order, username in rows
-    ]
-
-
-def _find_todays_line(db: Session, username: str, item_name: str) -> Order:
-    target_user = db.query(User).filter(User.username == username).first()
-    if target_user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{username}' not found")
-    order = (
-        db.query(Order)
-        .filter(Order.user_id == target_user.id, Order.order_date == today_local(), Order.item_name == item_name)
-        .first()
-    )
-    if order is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No order line for '{item_name}' today from {username}")
-    return order
-
-
-@router.post("/orders/today/line")
-def update_todays_order_line(
-    payload: AdminUpdateOrderLineRequest,
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_admin),
-):
-    """Inline edit from the "Dnešní objednávky" admin table -- adjusts an
-    existing line's quantity/note directly, without going through the
-    full per-user assign-order flow."""
-    if payload.quantity < 1:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Quantity must be at least 1")
-
-    order = _find_todays_line(db, payload.username, payload.item_name)
-    order.quantity = payload.quantity
-    order.note = payload.note.strip()[:255]
-    db.commit()
-    return {"ok": True}
-
-
-@router.delete("/orders/today/line")
-def delete_todays_order_line(
-    username: str,
-    item_name: str,
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_admin),
-):
-    order = _find_todays_line(db, username, item_name)
-    db.delete(order)
-    db.commit()
-    return {"ok": True}
 
 
 @router.get("/orders/week", response_model=list[OrderLineOut])

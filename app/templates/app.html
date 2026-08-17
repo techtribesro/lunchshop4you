@@ -57,16 +57,6 @@
     .chip-btn.danger:hover { border-color: var(--critical); }
     .admin-row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .status-note { font-size: 13.5px; color: var(--ink-muted); }
-    .inline-edit-num, .inline-edit-text {
-      font: inherit;
-      padding: 4px 7px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--surface-raised);
-      color: var(--ink);
-    }
-    .inline-edit-num { width: 56px; text-align: right; }
-    .inline-edit-text { width: 100%; min-width: 120px; }
 
     .field select {
       font: inherit;
@@ -98,10 +88,7 @@
   <div class="screen active" id="view-order">
     <div class="order-shell">
       {% if user.is_admin %}
-      <div class="field" style="max-width:280px;margin-bottom:16px;">
-        <label for="acting-as-user">Objednávám za</label>
-        <select id="acting-as-user"><option value="">Já ({{ user.username }})</option></select>
-      </div>
+      <div class="day-row" id="people-row"><!-- person pills injected by JS --></div>
       {% endif %}
 
       <div class="day-row" id="day-row"><!-- day pills injected by JS --></div>
@@ -213,23 +200,6 @@
         </div>
       </div>
 
-      <div class="admin-card">
-        <h3 class="admin-card-title">Dnešní objednávky</h3>
-        <div class="dash-table-wrap">
-          <table class="dash-table">
-            <thead>
-              <tr>
-                <th>Uživatel</th>
-                <th>Jídlo</th>
-                <th class="num">Počet</th>
-                <th>Poznámka</th>
-                <th class="num">Akce</th>
-              </tr>
-            </thead>
-            <tbody id="todays-orders-body"><!-- rows injected by JS --></tbody>
-          </table>
-        </div>
-      </div>
 
       <div class="admin-card">
         <h3 class="admin-card-title">Telegram odběratelé</h3>
@@ -623,7 +593,6 @@
         if (target === "dashboard") loadDashboard();
         if (target === "admin" && typeof refreshAdminUsers === "function") refreshAdminUsers();
         if (target === "admin" && typeof refreshTelegramSubscribers === "function") refreshTelegramSubscribers();
-        if (target === "admin" && typeof refreshTodaysOrders === "function") refreshTodaysOrders();
       });
     });
 
@@ -659,7 +628,7 @@
           </td>
         </tr>`).join("");
 
-      populateActingAsSelect(users);
+      renderPeoplePills(users);
 
       body.querySelectorAll('[data-action="reset"]').forEach(btn => {
         btn.addEventListener("click", async () => {
@@ -724,70 +693,6 @@
         statusEl.className = "submit-status error";
       }
     });
-
-    // ---- Admin: today's orders (all users, inline-editable) ----
-    async function refreshTodaysOrders() {
-      const resp = await fetch("/admin/orders/today");
-      if (!resp.ok) return;
-      const rows = await resp.json();
-      const body = document.getElementById("todays-orders-body");
-      if (rows.length === 0) {
-        body.innerHTML = '<tr><td colspan="5" class="items-note">Dnes zatím nikdo neobjednal.</td></tr>';
-        return;
-      }
-      body.innerHTML = rows.map(r => `
-        <tr>
-          <td>${r.username}</td>
-          <td>${r.item_name}</td>
-          <td class="num">
-            <input type="number" min="1" class="inline-edit-num tabular" value="${r.quantity}"
-                   data-username="${r.username}" data-item="${r.item_name.replace(/"/g, "&quot;")}" data-field="quantity" />
-          </td>
-          <td>
-            <input type="text" class="inline-edit-text" value="${(r.note || "").replace(/"/g, "&quot;")}"
-                   data-username="${r.username}" data-item="${r.item_name.replace(/"/g, "&quot;")}" data-field="note" />
-          </td>
-          <td class="num">
-            <button type="button" class="chip-btn danger" data-action="delete-line"
-                    data-username="${r.username}" data-item="${r.item_name.replace(/"/g, "&quot;")}">Smazat</button>
-          </td>
-        </tr>`).join("");
-
-      body.querySelectorAll(".inline-edit-num, .inline-edit-text").forEach(input => {
-        input.addEventListener("change", async () => {
-          const row = input.closest("tr");
-          const qtyInput = row.querySelector('[data-field="quantity"]');
-          const noteInput = row.querySelector('[data-field="note"]');
-          const resp = await fetch("/admin/orders/today/line", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username: input.dataset.username,
-              item_name: input.dataset.item,
-              quantity: parseInt(qtyInput.value, 10) || 1,
-              note: noteInput.value,
-            }),
-          });
-          if (!resp.ok) {
-            const body = await resp.json().catch(() => ({}));
-            alert(body.detail || "Uložení se nezdařilo.");
-            refreshTodaysOrders();
-          }
-        });
-      });
-
-      body.querySelectorAll('[data-action="delete-line"]').forEach(btn => {
-        btn.addEventListener("click", async () => {
-          if (!confirm(`Smazat ${btn.dataset.item} pro ${btn.dataset.username}?`)) return;
-          const resp = await fetch(
-            `/admin/orders/today/line?username=${encodeURIComponent(btn.dataset.username)}&item_name=${encodeURIComponent(btn.dataset.item)}`,
-            { method: "DELETE" }
-          );
-          if (resp.ok) refreshTodaysOrders();
-          else alert("Smazání se nezdařilo.");
-        });
-      });
-    }
 
     async function refreshTelegramSubscribers() {
       const resp = await fetch("/admin/telegram-subscribers");
@@ -888,21 +793,28 @@
       }
     });
 
-    function populateActingAsSelect(users) {
-      const sel = document.getElementById("acting-as-user");
-      if (!sel) return;
-      const prevValue = sel.value;
-      sel.innerHTML = `<option value="">Já (${USERNAME})</option>` +
-        users.filter(u => u.username !== USERNAME).map(u => `<option value="${u.username}">${u.username}</option>`).join("");
-      if (users.some(u => u.username === prevValue)) sel.value = prevValue;
+    function renderPeoplePills(users) {
+      const row = document.getElementById("people-row");
+      if (!row) return;
+      const people = [{ username: "", label: `Já (${USERNAME})` }]
+        .concat(users.filter(u => u.username !== USERNAME).map(u => ({ username: u.username, label: u.username })));
+      row.innerHTML = "";
+      people.forEach(p => {
+        const btn = document.createElement("button");
+        btn.className = "day-pill";
+        btn.type = "button";
+        if (p.username === actingAsUser) btn.setAttribute("aria-current", "true");
+        btn.innerHTML = `<div class="n">${p.label}</div>`;
+        btn.addEventListener("click", () => {
+          setActingAsUser(p.username);
+          renderPeoplePills(users);
+        });
+        row.appendChild(btn);
+      });
     }
 
-    document.getElementById("acting-as-user").addEventListener("change", (e) => {
-      setActingAsUser(e.target.value);
-    });
-
-    // Populate the acting-as selector immediately (not just when the admin
-    // tab is opened), since it lives on the order screen shown by default.
+    // Populate the people row immediately (not just when the admin tab is
+    // opened), since it lives on the order screen shown by default.
     refreshAdminUsers();
   </script>
   {% endif %}
