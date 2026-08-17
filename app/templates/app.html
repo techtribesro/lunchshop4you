@@ -57,6 +57,16 @@
     .chip-btn.danger:hover { border-color: var(--critical); }
     .admin-row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .status-note { font-size: 13.5px; color: var(--ink-muted); }
+    .inline-edit-num, .inline-edit-text {
+      font: inherit;
+      padding: 4px 7px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-raised);
+      color: var(--ink);
+    }
+    .inline-edit-num { width: 56px; text-align: right; }
+    .inline-edit-text { width: 100%; min-width: 120px; }
 
     .field select {
       font: inherit;
@@ -208,6 +218,7 @@
                 <th>Jídlo</th>
                 <th class="num">Počet</th>
                 <th>Poznámka</th>
+                <th class="num">Akce</th>
               </tr>
             </thead>
             <tbody id="todays-orders-body"><!-- rows injected by JS --></tbody>
@@ -846,24 +857,68 @@
       }
     });
 
-    // ---- Admin: Telegram subscribers ----
-    // ---- Admin: today's orders (all users) ----
+    // ---- Admin: today's orders (all users, inline-editable) ----
     async function refreshTodaysOrders() {
       const resp = await fetch("/admin/orders/today");
       if (!resp.ok) return;
       const rows = await resp.json();
       const body = document.getElementById("todays-orders-body");
       if (rows.length === 0) {
-        body.innerHTML = '<tr><td colspan="4" class="items-note">Dnes zatím nikdo neobjednal.</td></tr>';
+        body.innerHTML = '<tr><td colspan="5" class="items-note">Dnes zatím nikdo neobjednal.</td></tr>';
         return;
       }
       body.innerHTML = rows.map(r => `
         <tr>
           <td>${r.username}</td>
           <td>${r.item_name}</td>
-          <td class="num tabular">${r.quantity}</td>
-          <td>${r.note || ""}</td>
+          <td class="num">
+            <input type="number" min="1" class="inline-edit-num tabular" value="${r.quantity}"
+                   data-username="${r.username}" data-item="${r.item_name.replace(/"/g, "&quot;")}" data-field="quantity" />
+          </td>
+          <td>
+            <input type="text" class="inline-edit-text" value="${(r.note || "").replace(/"/g, "&quot;")}"
+                   data-username="${r.username}" data-item="${r.item_name.replace(/"/g, "&quot;")}" data-field="note" />
+          </td>
+          <td class="num">
+            <button type="button" class="chip-btn danger" data-action="delete-line"
+                    data-username="${r.username}" data-item="${r.item_name.replace(/"/g, "&quot;")}">Smazat</button>
+          </td>
         </tr>`).join("");
+
+      body.querySelectorAll(".inline-edit-num, .inline-edit-text").forEach(input => {
+        input.addEventListener("change", async () => {
+          const row = input.closest("tr");
+          const qtyInput = row.querySelector('[data-field="quantity"]');
+          const noteInput = row.querySelector('[data-field="note"]');
+          const resp = await fetch("/admin/orders/today/line", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: input.dataset.username,
+              item_name: input.dataset.item,
+              quantity: parseInt(qtyInput.value, 10) || 1,
+              note: noteInput.value,
+            }),
+          });
+          if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            alert(body.detail || "Uložení se nezdařilo.");
+            refreshTodaysOrders();
+          }
+        });
+      });
+
+      body.querySelectorAll('[data-action="delete-line"]').forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if (!confirm(`Smazat ${btn.dataset.item} pro ${btn.dataset.username}?`)) return;
+          const resp = await fetch(
+            `/admin/orders/today/line?username=${encodeURIComponent(btn.dataset.username)}&item_name=${encodeURIComponent(btn.dataset.item)}`,
+            { method: "DELETE" }
+          );
+          if (resp.ok) refreshTodaysOrders();
+          else alert("Smazání se nezdařilo.");
+        });
+      });
     }
 
     async function refreshTelegramSubscribers() {

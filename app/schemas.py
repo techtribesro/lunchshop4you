@@ -49,6 +49,13 @@ class AdminOrderRowOut(BaseModel):
     note: str
 
 
+class AdminUpdateOrderLineRequest(BaseModel):
+    username: str
+    item_name: str
+    quantity: int
+    note: str = ""
+
+
 class DashboardRow(BaseModel):
     user: str
     order_date: date
