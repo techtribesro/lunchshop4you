@@ -41,6 +41,14 @@ class OrderLineOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AdminOrderRowOut(BaseModel):
+    username: str
+    item_name: str
+    quantity: int
+    unit_price_czk: int
+    note: str
+
+
 class DashboardRow(BaseModel):
     user: str
     order_date: date

@@ -11,6 +11,7 @@ from app.schemas import (
     AdminAddTelegramSubscriberRequest,
     AdminAssignOrderRequest,
     AdminCreateUserRequest,
+    AdminOrderRowOut,
     AdminResetPasswordRequest,
     AdminSetCaloriesRequest,
     AdminSetPricesRequest,
@@ -22,7 +23,7 @@ from app.services.email_poller import EmailPollError, refresh_menu
 from app.services.order_summary import OrderSummaryError, send_daily_order_summary, send_telegram_only
 from app.services.sheets_sync import sync_all
 from app.services.telegram_notify import TelegramError
-from app.timezone import next_business_day, week_start
+from app.timezone import next_business_day, today_local, week_start
 
 logger = logging.getLogger("admin")
 
@@ -129,6 +130,30 @@ def set_menu_prices(
     db.commit()
     _sync_all_best_effort(db)
     return {"items_updated": updated}
+
+
+@router.get("/orders/today", response_model=list[AdminOrderRowOut])
+def list_todays_orders(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    rows = (
+        db.query(Order, User.username)
+        .join(User, User.id == Order.user_id)
+        .filter(Order.order_date == today_local())
+        .order_by(User.username, Order.item_name)
+        .all()
+    )
+    return [
+        {
+            "username": username,
+            "item_name": order.item_name,
+            "quantity": order.quantity,
+            "unit_price_czk": order.unit_price_czk,
+            "note": order.note,
+        }
+        for order, username in rows
+    ]
 
 
 @router.get("/orders", response_model=list[OrderLineOut])

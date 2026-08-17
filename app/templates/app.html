@@ -199,6 +199,23 @@
       </div>
 
       <div class="admin-card">
+        <h3 class="admin-card-title">Dnešní objednávky</h3>
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Uživatel</th>
+                <th>Jídlo</th>
+                <th class="num">Počet</th>
+                <th>Poznámka</th>
+              </tr>
+            </thead>
+            <tbody id="todays-orders-body"><!-- rows injected by JS --></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-card">
         <h3 class="admin-card-title">Telegram odběratelé</h3>
         <p class="status-note" style="margin-bottom:12px;">
           Kdokoli napíše botovi <strong>@lunchshop4you_bot</strong> (nebo ho přidá do
@@ -596,6 +613,7 @@
         }
         if (target === "admin" && typeof refreshEarlyOrdering === "function") refreshEarlyOrdering();
         if (target === "admin" && typeof refreshTelegramSubscribers === "function") refreshTelegramSubscribers();
+        if (target === "admin" && typeof refreshTodaysOrders === "function") refreshTodaysOrders();
       });
     });
 
@@ -829,6 +847,25 @@
     });
 
     // ---- Admin: Telegram subscribers ----
+    // ---- Admin: today's orders (all users) ----
+    async function refreshTodaysOrders() {
+      const resp = await fetch("/admin/orders/today");
+      if (!resp.ok) return;
+      const rows = await resp.json();
+      const body = document.getElementById("todays-orders-body");
+      if (rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="items-note">Dnes zatím nikdo neobjednal.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.username}</td>
+          <td>${r.item_name}</td>
+          <td class="num tabular">${r.quantity}</td>
+          <td>${r.note || ""}</td>
+        </tr>`).join("");
+    }
+
     async function refreshTelegramSubscribers() {
       const resp = await fetch("/admin/telegram-subscribers");
       if (!resp.ok) return;
