@@ -77,6 +77,7 @@
       <button type="button" data-goto="dashboard">Přehled</button>
       {% if user.is_admin %}<button type="button" data-goto="admin">Admin</button>{% endif %}
     </nav>
+    {% if user.is_admin %}<button type="button" id="topbar-send-out" class="send-out-btn">Odeslat objednávku</button>{% endif %}
     <div class="topbar-spacer"></div>
     <div class="user-chip">
       <div class="avatar" id="user-avatar"></div>
@@ -87,9 +88,7 @@
 
   <div class="screen active" id="view-order">
     <div class="order-shell">
-      {% if user.is_admin %}
       <div class="day-row" id="people-row"><!-- person pills injected by JS --></div>
-      {% endif %}
 
       <div class="day-row" id="day-row"><!-- day pills injected by JS --></div>
 
@@ -283,6 +282,7 @@
     const TODAY_ISO = {{ today_iso | tojson }};
     const WEEK_START_ISO = {{ week_start_iso | tojson }};
     const USERNAME = {{ user.username | tojson }};
+    const IS_ADMIN = {{ user.is_admin | tojson }};
 
     function dateForDay(dayLabel) {
       const idx = DAYS.indexOf(dayLabel);
@@ -324,10 +324,11 @@
       return result;
     }
 
-    // Admin-only: "Objednávám za" -- carts, cached per acting-as user so
+    // "Objednávám za" -- anyone can view anyone's orders; only admins can
+    // actually edit someone else's. Carts are cached per acting-as user so
     // switching back and forth doesn't re-fetch. "" (self) is seeded from
     // the server-rendered ORDERS_BY_DAY; anyone else is fetched on demand
-    // from /admin/orders/week.
+    // from /orders/week/{username}.
     let actingAsUser = "";
     const cartsByUser = { "": buildCartsFromDayMap(ORDERS_BY_DAY) };
     let carts = cartsByUser[""];
@@ -335,7 +336,7 @@
     async function setActingAsUser(username) {
       actingAsUser = username || "";
       if (!(actingAsUser in cartsByUser)) {
-        const resp = await fetch(`/admin/orders/week?username=${encodeURIComponent(actingAsUser)}`);
+        const resp = await fetch(`/orders/week/${encodeURIComponent(actingAsUser)}`);
         cartsByUser[actingAsUser] = resp.ok ? buildCartsFromOrderList(await resp.json()) : buildCartsFromDayMap({});
       }
       carts = cartsByUser[actingAsUser];
@@ -351,6 +352,7 @@
       return carts[iso] || (carts[iso] = {});
     }
     function isEditable(day) {
+      if (actingAsUser && !IS_ADMIN) return false; // viewing someone else, read-only
       return dateForDay(day) >= TODAY_ISO;
     }
 
@@ -480,6 +482,7 @@
     }
 
     async function submitOrder() {
+      if (actingAsUser && !IS_ADMIN) return; // read-only view of someone else's orders
       const cart = currentCart();
       const dateIso = currentDateIso();
       const statusEl = document.getElementById("submit-status-desktop");
@@ -601,10 +604,58 @@
       window.location.href = "/login";
     });
 
+    // ---- "Objednávám za" pill row: everyone can view anyone's orders ----
+    function renderPeoplePills(usernames) {
+      const row = document.getElementById("people-row");
+      if (!row) return;
+      const people = [{ username: "", label: `Já (${USERNAME})` }]
+        .concat(usernames.filter(u => u !== USERNAME).map(u => ({ username: u, label: u })));
+      row.innerHTML = "";
+      people.forEach(p => {
+        const btn = document.createElement("button");
+        btn.className = "day-pill";
+        btn.type = "button";
+        if (p.username === actingAsUser) btn.setAttribute("aria-current", "true");
+        btn.innerHTML = `<div class="n">${p.label}</div>`;
+        btn.addEventListener("click", () => {
+          setActingAsUser(p.username);
+          renderPeoplePills(usernames);
+        });
+        row.appendChild(btn);
+      });
+    }
+
+    async function loadPeopleList() {
+      const resp = await fetch("/users");
+      if (!resp.ok) return;
+      renderPeoplePills(await resp.json());
+    }
+
+    const sendOutBtn = document.getElementById("topbar-send-out");
+    if (sendOutBtn) {
+      sendOutBtn.addEventListener("click", async () => {
+        if (!confirm("Odeslat dnešní objednávku restauraci (e-mail + Telegram)?")) return;
+        const originalText = sendOutBtn.textContent;
+        sendOutBtn.disabled = true;
+        sendOutBtn.textContent = "Odesílám...";
+        const resp = await fetch("/admin/send-order-summary", { method: "POST" });
+        const body = await resp.json().catch(() => ({}));
+        sendOutBtn.disabled = false;
+        if (resp.ok) {
+          sendOutBtn.textContent = `Odesláno (${body.order_lines_sent})`;
+        } else {
+          sendOutBtn.textContent = originalText;
+          alert(body.detail || "Odeslání se nezdařilo.");
+        }
+        setTimeout(() => { sendOutBtn.textContent = originalText; }, 3000);
+      });
+    }
+
     renderDays();
     renderMenu();
     renderSummary();
     updateSubmitState();
+    loadPeopleList();
   </script>
 
   {% if user.is_admin %}
@@ -627,8 +678,6 @@
             </div>
           </td>
         </tr>`).join("");
-
-      renderPeoplePills(users);
 
       body.querySelectorAll('[data-action="reset"]').forEach(btn => {
         btn.addEventListener("click", async () => {
@@ -793,29 +842,6 @@
       }
     });
 
-    function renderPeoplePills(users) {
-      const row = document.getElementById("people-row");
-      if (!row) return;
-      const people = [{ username: "", label: `Já (${USERNAME})` }]
-        .concat(users.filter(u => u.username !== USERNAME).map(u => ({ username: u.username, label: u.username })));
-      row.innerHTML = "";
-      people.forEach(p => {
-        const btn = document.createElement("button");
-        btn.className = "day-pill";
-        btn.type = "button";
-        if (p.username === actingAsUser) btn.setAttribute("aria-current", "true");
-        btn.innerHTML = `<div class="n">${p.label}</div>`;
-        btn.addEventListener("click", () => {
-          setActingAsUser(p.username);
-          renderPeoplePills(users);
-        });
-        row.appendChild(btn);
-      });
-    }
-
-    // Populate the people row immediately (not just when the admin tab is
-    // opened), since it lives on the order screen shown by default.
-    refreshAdminUsers();
   </script>
   {% endif %}
 </body>

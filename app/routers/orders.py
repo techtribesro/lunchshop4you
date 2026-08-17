@@ -82,3 +82,23 @@ def my_week_orders(
         .order_by(Order.order_date, Order.item_name)
         .all()
     )
+
+
+@router.get("/week/{username}", response_model=list[OrderLineOut])
+def user_week_orders(
+    username: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Anyone logged in can view anyone else's current-week orders -- backs
+    the "Objednávám za" pill row on the order screen. Only admins can
+    actually submit on someone else's behalf (see /admin/orders)."""
+    target_user = db.query(User).filter(User.username == username).first()
+    if target_user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{username}' not found")
+    return (
+        db.query(Order)
+        .filter(Order.user_id == target_user.id, Order.week_start == week_start())
+        .order_by(Order.order_date, Order.item_name)
+        .all()
+    )
