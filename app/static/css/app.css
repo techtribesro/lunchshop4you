@@ -330,16 +330,6 @@
     margin: 5px auto 0;
   }
   .day-pill[aria-current="true"].is-today::after { background: #fbfaf5; }
-  .day-pill.is-early::after {
-    content: "";
-    display: block;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    margin: 5px auto 0;
-  }
-  .day-pill[aria-current="true"].is-early::after { background: #fbfaf5; }
 
   .order-grid {
     display: grid;

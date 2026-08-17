@@ -282,15 +282,6 @@
       </div>
 
       <div class="admin-card">
-        <h3 class="admin-card-title">Předobjednávka na další den</h3>
-        <div class="admin-actions">
-          <span id="early-ordering-status" class="status-note"></span>
-          <button class="btn-primary" type="button" id="admin-early-toggle"></button>
-          <p class="submit-status" id="early-ordering-action-status"></p>
-        </div>
-      </div>
-
-      <div class="admin-card">
         <h3 class="admin-card-title">Uživatelé</h3>
         <div class="dash-table-wrap">
           <table class="dash-table">
@@ -335,44 +326,37 @@
     const TODAY = {{ today_label | tojson }};
     const TODAY_ISO = {{ today_iso | tojson }};
     const WEEK_START_ISO = {{ week_start_iso | tojson }};
-    const EARLY_LABEL = {{ early_label | tojson }};
-    const EARLY_ISO = {{ early_iso | tojson }};
     const USERNAME = {{ user.username | tojson }};
-    const ORDERING_OPEN = {{ ordering_open | tojson }};
 
-    // Which day labels have a cart concept at all (viewable), keyed to
-    // their ISO date. TODAY is always present (read-only after cutoff);
-    // EARLY_LABEL only when an admin has opened it.
-    const DATE_BY_LABEL = {};
-    if (TODAY) DATE_BY_LABEL[TODAY] = TODAY_ISO;
-    if (EARLY_LABEL) DATE_BY_LABEL[EARLY_LABEL] = EARLY_ISO;
+    function dateForDay(dayLabel) {
+      const idx = DAYS.indexOf(dayLabel);
+      const d = new Date(WEEK_START_ISO + "T00:00:00");
+      d.setDate(d.getDate() + idx);
+      return d.toISOString().slice(0, 10);
+    }
 
     let selectedDay = TODAY || DAYS[0];
 
+    // No more day-locking: every weekday in the loaded week has a cart,
+    // pre-populated from that day's existing orders.
     const carts = {}; // dateIso -> { item_name: {price, qty, note, kcal} }
-    if (TODAY_ISO) {
-      carts[TODAY_ISO] = {};
-      {% for name, entry in existing_orders.items() %}
-        carts[TODAY_ISO][{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }}, kcal: {{ entry.kcal | tojson }} };
-      {% endfor %}
-    }
-    if (EARLY_ISO) {
-      carts[EARLY_ISO] = {};
-      {% for name, entry in early_existing_orders.items() %}
-        carts[EARLY_ISO][{{ name | tojson }}] = { price: {{ entry.price }}, qty: {{ entry.qty }}, note: {{ entry.note | tojson }}, kcal: {{ entry.kcal | tojson }} };
-      {% endfor %}
-    }
+    const ORDERS_BY_DAY = {{ orders_by_day | tojson }};
+    DAYS.forEach(day => {
+      const iso = dateForDay(day);
+      carts[iso] = {};
+      const existing = ORDERS_BY_DAY[day] || {};
+      Object.entries(existing).forEach(([name, entry]) => {
+        carts[iso][name] = { price: entry.price, qty: entry.qty, note: entry.note, kcal: entry.kcal };
+      });
+    });
 
-    function currentDateIso() { return DATE_BY_LABEL[selectedDay]; }
+    function currentDateIso() { return dateForDay(selectedDay); }
     function currentCart() {
       const iso = currentDateIso();
-      if (!iso) return null;
       return carts[iso] || (carts[iso] = {});
     }
     function isEditable(day) {
-      if (day === TODAY) return ORDERING_OPEN;
-      if (day === EARLY_LABEL) return true;
-      return false;
+      return dateForDay(day) >= TODAY_ISO;
     }
 
     function fmt(n) { return n.toLocaleString("cs-CZ") + " Kč"; }
@@ -385,9 +369,8 @@
       row.innerHTML = "";
       DAYS.forEach(day => {
         const btn = document.createElement("button");
-        btn.className = "day-pill" + (day === TODAY ? " is-today" : "") + (day === EARLY_LABEL ? " is-early" : "");
+        btn.className = "day-pill" + (day === TODAY ? " is-today" : "");
         btn.type = "button";
-        if (day === EARLY_LABEL) btn.title = "Předobjednávka otevřena";
         if (day === selectedDay) btn.setAttribute("aria-current", "true");
         btn.innerHTML = `<div class="d">${day.slice(0,2).toUpperCase()}</div><div class="n">${day}</div>`;
         btn.addEventListener("click", () => { selectedDay = day; renderDays(); renderMenu(); renderSummary(); updateSubmitState(); });
@@ -480,14 +463,6 @@
       const totalEl = document.getElementById("summary-total");
       const totalMobileEl = document.getElementById("summary-total-mobile");
       const totalKcalEl = document.getElementById("summary-total-kcal");
-
-      if (cart === null) {
-        body.innerHTML = '<p class="summary-empty">Pro tento den nelze objednávat.</p>';
-        totalEl.textContent = fmt(0);
-        totalMobileEl.textContent = fmt(0);
-        totalKcalEl.textContent = "";
-        return;
-      }
 
       const entries = Object.values(cart);
       if (entries.length === 0) {
@@ -622,7 +597,6 @@
             if (typeof loadAssignOrder === "function") loadAssignOrder();
           });
         }
-        if (target === "admin" && typeof refreshEarlyOrdering === "function") refreshEarlyOrdering();
         if (target === "admin" && typeof refreshTelegramSubscribers === "function") refreshTelegramSubscribers();
         if (target === "admin" && typeof refreshTodaysOrders === "function") refreshTodaysOrders();
       });
@@ -731,13 +705,6 @@
 
     // ---- Admin: assign a meal to a user ----
     let assignCart = {}; // item_name -> {price, qty, note}
-
-    function dateForDay(dayLabel) {
-      const idx = DAYS.indexOf(dayLabel);
-      const d = new Date(WEEK_START_ISO + "T00:00:00");
-      d.setDate(d.getDate() + idx);
-      return d.toISOString().slice(0, 10);
-    }
 
     function renderAssignDayOptions() {
       const sel = document.getElementById("assign-day");
@@ -973,38 +940,6 @@
       }
     });
 
-    async function refreshEarlyOrdering() {
-      const resp = await fetch("/admin/early-ordering");
-      if (!resp.ok) return;
-      const state = await resp.json();
-      const statusSpan = document.getElementById("early-ordering-status");
-      const toggleBtn = document.getElementById("admin-early-toggle");
-      if (state.open) {
-        statusSpan.textContent = `Objednávky na ${state.date} jsou otevřené.`;
-        toggleBtn.textContent = "Zavřít předobjednávku";
-        toggleBtn.classList.add("btn-danger");
-      } else {
-        statusSpan.textContent = `Další pracovní den: ${state.date} (zatím uzavřeno).`;
-        toggleBtn.textContent = "Otevřít objednávky na tento den";
-        toggleBtn.classList.remove("btn-danger");
-      }
-      toggleBtn.dataset.open = state.open ? "1" : "0";
-    }
-
-    document.getElementById("admin-early-toggle").addEventListener("click", async () => {
-      const btn = document.getElementById("admin-early-toggle");
-      const isOpen = btn.dataset.open === "1";
-      const statusEl = document.getElementById("early-ordering-action-status");
-      const resp = await fetch(`/admin/early-ordering/${isOpen ? "close" : "open"}`, { method: "POST" });
-      const body = await resp.json().catch(() => ({}));
-      if (resp.ok) {
-        statusEl.textContent = "";
-        refreshEarlyOrdering();
-      } else {
-        statusEl.textContent = body.detail || "Akce se nezdařila.";
-        statusEl.className = "submit-status error";
-      }
-    });
 
     document.getElementById("admin-parse-menu").addEventListener("click", async () => {
       const statusEl = document.getElementById("admin-action-status");

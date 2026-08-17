@@ -43,13 +43,3 @@ def menu_target_week_start(for_date: date | None = None) -> date:
 def month_start(for_date: date | None = None) -> date:
     for_date = for_date or today_local()
     return for_date.replace(day=1)
-
-
-def next_business_day(for_date: date | None = None) -> date:
-    """The next Mon-Fri date after for_date (skips weekends) -- e.g. Friday
-    -> Monday, so "open ordering for tomorrow" is still useful on a Friday."""
-    for_date = for_date or today_local()
-    next_day = for_date + timedelta(days=1)
-    while next_day.weekday() >= 5:
-        next_day += timedelta(days=1)
-    return next_day

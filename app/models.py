@@ -79,16 +79,3 @@ class TelegramSubscriber(Base):
     chat_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(128), default="")
     subscribed_at: Mapped[datetime] = mapped_column(DateTime, default=now_local_naive)
-
-
-class EarlyOrderingWindow(Base):
-    """A date an admin has manually opened for ordering ahead of time,
-    bypassing the normal "must be today, before cutoff" rule -- e.g.
-    opening tomorrow's ordering the evening before."""
-
-    __tablename__ = "early_ordering_windows"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    order_date: Mapped[date] = mapped_column(Date, unique=True, index=True)
-    opened_by: Mapped[str] = mapped_column(String(64))
-    opened_at: Mapped[datetime] = mapped_column(DateTime, default=now_local_naive)

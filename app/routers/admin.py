@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import hash_password, require_admin
 from app.db import get_db
-from app.models import EarlyOrderingWindow, MenuItem, Order, TelegramSubscriber, User
+from app.models import MenuItem, Order, TelegramSubscriber, User
 from app.schemas import (
     AdminAddTelegramSubscriberRequest,
     AdminAssignOrderRequest,
@@ -24,7 +24,7 @@ from app.services.email_poller import EmailPollError, refresh_menu
 from app.services.order_summary import OrderSummaryError, send_daily_order_summary, send_telegram_only
 from app.services.sheets_sync import sync_all
 from app.services.telegram_notify import TelegramError
-from app.timezone import next_business_day, today_local, week_start
+from app.timezone import today_local, week_start
 
 logger = logging.getLogger("admin")
 
@@ -227,9 +227,9 @@ def assign_order(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """Lets an admin set a user's order for a given date directly -- bypasses
-    the normal cutoff/early-ordering rules, since the whole point is to fill
-    in orders on someone's behalf (forgot to order, out of office, etc.)."""
+    """Lets an admin set a user's order for a given date directly -- for
+    filling in orders on someone's behalf (forgot to order, out of office,
+    etc.). Still only allows weekdays in an already-loaded week."""
     target_user = db.query(User).filter(User.username == payload.username).first()
     if target_user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{payload.username}' not found")
@@ -315,50 +315,6 @@ def send_order_telegram(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
     return {"order_lines_sent": line_count}
-
-
-@router.get("/early-ordering")
-def get_early_ordering_status(
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_admin),
-):
-    target = next_business_day()
-    window = db.query(EarlyOrderingWindow).filter(EarlyOrderingWindow.order_date == target).first()
-    return {"date": target.isoformat(), "open": window is not None}
-
-
-@router.post("/early-ordering/open")
-def open_early_ordering(
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
-):
-    target = next_business_day()
-    if week_start(target) != week_start():
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Next business day falls in a week whose menu isn't loaded yet -- can't open ordering for it.",
-        )
-    if not db.query(EarlyOrderingWindow).filter(EarlyOrderingWindow.order_date == target).first():
-        db.add(EarlyOrderingWindow(order_date=target, opened_by=admin.username))
-        db.commit()
-    return {"date": target.isoformat(), "open": True}
-
-
-@router.post("/early-ordering/close")
-def close_early_ordering(
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_admin),
-):
-    target = next_business_day()
-    db.query(EarlyOrderingWindow).filter(EarlyOrderingWindow.order_date == target).delete()
-    db.commit()
-    return {"date": target.isoformat(), "open": False}
-
-
-# Stale windows (the date has already passed -- normal cutoff rules take
-# over once a date becomes "today") are left in place rather than cleaned
-# up; they're harmless and _check_ordering_allowed only ever looks up the
-# exact target date, so old rows are simply never matched again.
 
 
 @router.get("/users", response_model=list[AdminUserOut])

@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user_optional
 from app.db import get_db
-from app.models import EarlyOrderingWindow, MenuItem, Order, User
-from app.timezone import next_business_day, today_local, week_start
+from app.models import MenuItem, Order, User
+from app.timezone import today_local, week_start
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
@@ -65,35 +65,22 @@ def order_page(
     today_label = DAY_LABELS_CZ.get(DAY_NAMES[today.weekday()]) if is_weekday else None
     calories_by_item_name = {item.item_name: item.calories_kcal for item in week_items}
 
-    existing_orders = {
-        order.item_name: {
+    # No more day-locking: every weekday in the loaded week is orderable, so
+    # existing orders are collected for the whole week (keyed by day label),
+    # not just today.
+    orders_by_day: dict[str, dict] = {label: {} for label in DAY_LABELS_CZ.values()}
+    week_orders = db.query(Order).filter(Order.user_id == user.id, Order.week_start == ws).all()
+    for order in week_orders:
+        day_name = DAY_NAMES[order.order_date.weekday()]
+        label = DAY_LABELS_CZ.get(day_name)
+        if label is None:
+            continue
+        orders_by_day[label][order.item_name] = {
             "qty": order.quantity,
             "note": order.note,
             "price": order.unit_price_czk,
             "kcal": calories_by_item_name.get(order.item_name),
         }
-        for order in db.query(Order).filter(Order.user_id == user.id, Order.order_date == today).all()
-    }
-
-    # Early ordering: an admin can open the next business day ahead of its
-    # own cutoff. Only offered when that day falls in the already-loaded
-    # week (see admin.open_early_ordering's same-week guard).
-    early_date = next_business_day(today)
-    early_label = None
-    early_existing_orders: dict[str, dict] = {}
-    if week_start(early_date) == ws:
-        window = db.query(EarlyOrderingWindow).filter(EarlyOrderingWindow.order_date == early_date).first()
-        if window is not None:
-            early_label = DAY_LABELS_CZ.get(DAY_NAMES[early_date.weekday()])
-            early_existing_orders = {
-                order.item_name: {
-                    "qty": order.quantity,
-                    "note": order.note,
-                    "price": order.unit_price_czk,
-                    "kcal": calories_by_item_name.get(order.item_name),
-                }
-                for order in db.query(Order).filter(Order.user_id == user.id, Order.order_date == early_date).all()
-            }
 
     return templates.TemplateResponse(
         request,
@@ -103,12 +90,8 @@ def order_page(
             "menu_by_day": menu_by_day,
             "day_labels": list(DAY_LABELS_CZ.values()),
             "today_label": today_label,
-            "existing_orders": existing_orders,
-            "ordering_open": is_weekday,
+            "orders_by_day": orders_by_day,
             "today_iso": today.isoformat(),
             "week_start_iso": ws.isoformat(),
-            "early_label": early_label,
-            "early_iso": early_date.isoformat() if early_label else None,
-            "early_existing_orders": early_existing_orders,
         },
     )

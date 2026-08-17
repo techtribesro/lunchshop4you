@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.models import EarlyOrderingWindow, MenuItem, Order, User
+from app.models import MenuItem, Order, User
 from app.schemas import OrderLineOut, OrderSubmitRequest
 from app.timezone import today_local, week_start
 
@@ -12,19 +12,13 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
 
-def _check_ordering_allowed(db: Session, target_date) -> None:
-    """No time-of-day cutoff -- orders for today or an admin-opened future
-    date can be placed/edited any time. Only past dates and weekends are
-    blocked."""
+def _check_ordering_allowed(target_date) -> None:
+    """No day-locking, no cutoff -- any weekday in a loaded menu week can be
+    ordered/edited freely. Only past dates and weekends are blocked."""
     today = today_local()
 
     if target_date < today:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot order for a past date")
-
-    if target_date != today:
-        window = db.query(EarlyOrderingWindow).filter(EarlyOrderingWindow.order_date == target_date).first()
-        if window is None:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Ordering for {target_date} is not open yet")
 
     if target_date.weekday() >= 5:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No ordering on weekends")
@@ -37,7 +31,7 @@ def submit_order(
     user: User = Depends(get_current_user),
 ):
     target_date = payload.order_date or today_local()
-    _check_ordering_allowed(db, target_date)
+    _check_ordering_allowed(target_date)
 
     day_name = DAY_NAMES[target_date.weekday()]
     target_week_start = week_start(target_date)
