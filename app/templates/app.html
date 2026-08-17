@@ -91,19 +91,6 @@
     <div class="order-shell">
       <div class="day-row" id="day-row"><!-- day pills injected by JS --></div>
 
-      <div class="cutoff-pill {{ 'critical' if cutoff_state == 'closed' else ('warn' if cutoff_state == 'warn' else '') }}" id="cutoff-pill">
-        <span class="dot"></span>
-        <span id="cutoff-text">
-          {%- if cutoff_state == "open" -%}
-            Objednávky otevřeny do {{ cutoff_time }}
-          {%- elif cutoff_state == "warn" -%}
-            Objednávky se brzy uzavřou ({{ cutoff_time }})
-          {%- else -%}
-            Objednávky jsou dnes uzavřené
-          {%- endif -%}
-        </span>
-      </div>
-
       <div class="order-grid">
         <div id="menu-list"><!-- category blocks injected by JS --></div>
 
@@ -119,7 +106,7 @@
           <div class="stat-kcal tabular" id="summary-total-kcal" style="text-align:right;"></div>
           <button class="btn-primary" type="button" id="submit-order">Zaznamenat objednávku</button>
           <p class="submit-status" id="submit-status-desktop"></p>
-          <p class="summary-note">Do {{ cutoff_time }} lze objednávku kdykoli upravit.</p>
+          <p class="summary-note">Objednávku lze kdykoli upravit.</p>
         </aside>
       </div>
     </div>

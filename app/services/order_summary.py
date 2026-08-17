@@ -1,7 +1,7 @@
-"""Sends the day's lunch order to the restaurant by email, shortly after the
-order cutoff (see app.services.scheduler, ORDER_CUTOFF_TIME). Builds an HTML
-table rather than an .xlsx attachment -- readable directly in the inbox, no
-dependency on a spreadsheet library.
+"""Sends the day's lunch order to the restaurant by email, on demand (admin
+panel button, no automatic schedule). Builds an HTML table rather than an
+.xlsx attachment -- readable directly in the inbox, no dependency on a
+spreadsheet library.
 """
 
 import logging

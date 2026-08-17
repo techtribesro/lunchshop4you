@@ -5,7 +5,7 @@ from app.auth import get_current_user
 from app.db import get_db
 from app.models import EarlyOrderingWindow, MenuItem, Order, User
 from app.schemas import OrderLineOut, OrderSubmitRequest
-from app.timezone import is_before_cutoff, today_local, week_start
+from app.timezone import today_local, week_start
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -13,15 +13,15 @@ DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
 
 def _check_ordering_allowed(db: Session, target_date) -> None:
+    """No time-of-day cutoff -- orders for today or an admin-opened future
+    date can be placed/edited any time. Only past dates and weekends are
+    blocked."""
     today = today_local()
 
     if target_date < today:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot order for a past date")
 
-    if target_date == today:
-        if not is_before_cutoff():
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Order cutoff has passed for today")
-    else:
+    if target_date != today:
         window = db.query(EarlyOrderingWindow).filter(EarlyOrderingWindow.order_date == target_date).first()
         if window is None:
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"Ordering for {target_date} is not open yet")

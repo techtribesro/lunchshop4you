@@ -477,27 +477,6 @@
     padding: 20px;
     box-shadow: var(--shadow);
   }
-  .cutoff-pill {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--accent-tint);
-    color: var(--accent-strong);
-    border-radius: 999px;
-    padding: 7px 12px;
-    font-size: 12.5px;
-    font-weight: 600;
-    margin-bottom: 18px;
-  }
-  .cutoff-pill .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--accent-strong);
-  }
-  .cutoff-pill.warn { background: var(--warn-tint); color: var(--warn); }
-  .cutoff-pill.warn .dot { background: var(--warn); }
-  .cutoff-pill.critical { background: var(--critical-tint); color: var(--critical); }
-  .cutoff-pill.critical .dot { background: var(--critical); }
-
   .summary-title { font-size: 15px; margin-bottom: 12px; }
   .summary-empty {
     font-size: 13px;

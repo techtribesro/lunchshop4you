@@ -1,15 +1,12 @@
-from datetime import timedelta
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user_optional
-from app.config import settings
 from app.db import get_db
 from app.models import EarlyOrderingWindow, MenuItem, Order, User
-from app.timezone import is_before_cutoff, next_business_day, now_local, today_local, week_start
+from app.timezone import next_business_day, today_local, week_start
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
@@ -22,23 +19,6 @@ DAY_LABELS_CZ = {
     "Thursday": "Čtvrtek",
     "Friday": "Pátek",
 }
-
-WARN_WINDOW_MINUTES = 15
-
-
-def _cutoff_state(is_weekday: bool) -> str:
-    """"open" / "warn" (closing soon) / "closed", for the cutoff pill."""
-    if not is_weekday:
-        return "closed"
-    now = now_local()
-    cutoff_dt = now.replace(
-        hour=settings.order_cutoff.hour, minute=settings.order_cutoff.minute, second=0, microsecond=0
-    )
-    if now >= cutoff_dt:
-        return "closed"
-    if cutoff_dt - now <= timedelta(minutes=WARN_WINDOW_MINUTES):
-        return "warn"
-    return "open"
 
 
 @router.get("/login")
@@ -124,9 +104,7 @@ def order_page(
             "day_labels": list(DAY_LABELS_CZ.values()),
             "today_label": today_label,
             "existing_orders": existing_orders,
-            "ordering_open": is_weekday and is_before_cutoff(),
-            "cutoff_state": _cutoff_state(is_weekday),
-            "cutoff_time": settings.order_cutoff_time,
+            "ordering_open": is_weekday,
             "today_iso": today.isoformat(),
             "week_start_iso": ws.isoformat(),
             "early_label": early_label,

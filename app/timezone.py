@@ -19,11 +19,6 @@ def today_local() -> date:
     return now_local().date()
 
 
-def is_before_cutoff(moment: datetime | None = None) -> bool:
-    moment = moment or now_local()
-    return moment.astimezone(PRAGUE).time() < settings.order_cutoff
-
-
 def week_start(for_date: date | None = None) -> date:
     """Monday of the ISO week containing for_date (defaults to today, local time)."""
     for_date = for_date or today_local()
