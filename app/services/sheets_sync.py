@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import MenuItem, Order, User
+from app.schemas import DashboardRow
 from app.services.dashboard import compute_dashboard
 
 logger = logging.getLogger("sheets_sync")
@@ -248,40 +249,32 @@ def sync_orders(db: Session) -> None:
 
 
 def sync_dashboard(db: Session) -> None:
+    """One row per user -- week_total_czk/month_total_czk/etc. are already
+    constant across a user's daily rows in compute_dashboard()'s output, so
+    a flat per-(user, date) table just repeats the same totals on every row
+    the user appears in. Day-level detail already lives in the "orders"
+    tab; this tab is purely the at-a-glance budget summary."""
     data = compute_dashboard(db)
+
+    summary_by_user: dict[str, DashboardRow] = {}
+    for r in data.rows:
+        summary_by_user.setdefault(r.user, r)
+
     rows = [
-        [
-            r.user,
-            r.order_date.isoformat(),
-            r.items_ordered,
-            r.daily_total_czk,
-            r.week_total_czk,
-            r.month_total_czk,
-            r.daily_total_kcal,
-            r.week_total_kcal,
-            r.month_total_kcal,
-        ]
-        for r in data.rows
+        [r.user, r.week_total_czk, r.month_total_czk, r.week_total_kcal, r.month_total_kcal]
+        for r in sorted(summary_by_user.values(), key=lambda r: r.user)
     ]
     rows.append(
-        [
-            "CELKEM", "", "", "",
-            data.week_aggregate_czk, data.month_aggregate_czk,
-            "", data.week_aggregate_kcal, data.month_aggregate_kcal,
-        ]
+        ["CELKEM", data.week_aggregate_czk, data.month_aggregate_czk, data.week_aggregate_kcal, data.month_aggregate_kcal]
     )
     _write_sheet(
         "dashboard",
-        [
-            "Uživatel", "Datum", "Položky",
-            "Den Kč", "Týden Kč", "Měsíc Kč",
-            "Den kcal", "Týden kcal", "Měsíc kcal",
-        ],
+        ["Uživatel", "Týden Kč", "Měsíc Kč", "Týden kcal", "Měsíc kcal"],
         rows,
-        currency_cols=(3, 4, 5),
-        kcal_cols=(6, 7, 8),
+        currency_cols=(1, 2),
+        kcal_cols=(3, 4),
         bold_last_row=True,
-        column_widths={0: 100, 1: 100, 2: 70, 3: 90, 4: 95, 5: 95, 6: 95, 7: 100, 8: 100},
+        column_widths={0: 110, 1: 95, 2: 95, 3: 100, 4: 100},
     )
 
 
