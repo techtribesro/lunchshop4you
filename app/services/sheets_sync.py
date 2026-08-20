@@ -83,6 +83,7 @@ def _apply_formatting(
     currency_cols: tuple[int, ...],
     kcal_cols: tuple[int, ...],
     bold_last_row: bool,
+    column_widths: dict[int, int] | None = None,
 ) -> None:
     requests = [
         {
@@ -106,12 +107,35 @@ def _apply_formatting(
                 "fields": "userEnteredFormat(backgroundColor,textFormat)",
             }
         },
-        {
-            "autoResizeDimensions": {
-                "dimensions": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": num_cols}
-            }
-        },
     ]
+
+    if column_widths:
+        # Explicit widths, not autoResizeDimensions -- autoResize measures
+        # plain (non-bold) text width, so it under-sizes bold header cells
+        # by a character or two and clips them (e.g. "daily_total_czk" ->
+        # "daily_total_czl"). Fixed widths sized for these short labels
+        # sidestep that entirely.
+        for col, width in column_widths.items():
+            requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id, "dimension": "COLUMNS",
+                            "startIndex": col, "endIndex": col + 1,
+                        },
+                        "properties": {"pixelSize": width},
+                        "fields": "pixelSize",
+                    }
+                }
+            )
+    else:
+        requests.append(
+            {
+                "autoResizeDimensions": {
+                    "dimensions": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": num_cols}
+                }
+            }
+        )
 
     data_end_row = num_data_rows + 1  # +1 for the header row already occupying row 0
     for col in (*currency_cols, *kcal_cols):
@@ -154,6 +178,7 @@ def _write_sheet(
     currency_cols: tuple[int, ...] = (),
     kcal_cols: tuple[int, ...] = (),
     bold_last_row: bool = False,
+    column_widths: dict[int, int] | None = None,
 ) -> None:
     service = _get_service()
     if service is None:
@@ -174,7 +199,10 @@ def _write_sheet(
         body={"values": [header] + rows},
     ).execute()
 
-    _apply_formatting(service, spreadsheet_id, sheet_id, len(header), len(rows), currency_cols, kcal_cols, bold_last_row)
+    _apply_formatting(
+        service, spreadsheet_id, sheet_id, len(header), len(rows),
+        currency_cols, kcal_cols, bold_last_row, column_widths,
+    )
 
 
 def sync_menu(db: Session) -> None:
@@ -237,7 +265,7 @@ def sync_dashboard(db: Session) -> None:
     ]
     rows.append(
         [
-            "TOTAL", "", "", "",
+            "CELKEM", "", "", "",
             data.week_aggregate_czk, data.month_aggregate_czk,
             "", data.week_aggregate_kcal, data.month_aggregate_kcal,
         ]
@@ -245,14 +273,15 @@ def sync_dashboard(db: Session) -> None:
     _write_sheet(
         "dashboard",
         [
-            "user", "order_date", "items_ordered",
-            "daily_total_czk", "week_total_czk", "month_total_czk",
-            "daily_total_kcal", "week_total_kcal", "month_total_kcal",
+            "Uživatel", "Datum", "Položky",
+            "Den Kč", "Týden Kč", "Měsíc Kč",
+            "Den kcal", "Týden kcal", "Měsíc kcal",
         ],
         rows,
         currency_cols=(3, 4, 5),
         kcal_cols=(6, 7, 8),
         bold_last_row=True,
+        column_widths={0: 100, 1: 100, 2: 70, 3: 90, 4: 95, 5: 95, 6: 95, 7: 100, 8: 100},
     )
 
 
