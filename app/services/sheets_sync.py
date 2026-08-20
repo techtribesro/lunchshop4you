@@ -57,24 +57,110 @@ def _get_service():
     return _service
 
 
-def _ensure_tab_exists(service, spreadsheet_id: str, title: str) -> None:
+HEADER_BG = {"red": 0.16, "green": 0.29, "blue": 0.49}
+HEADER_FG = {"red": 1, "green": 1, "blue": 1}
+TOTAL_BG = {"red": 0.9, "green": 0.93, "blue": 0.98}
+
+
+def _ensure_tab_exists(service, spreadsheet_id: str, title: str) -> int:
     meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-    existing = {s["properties"]["title"] for s in meta["sheets"]}
-    if title in existing:
-        return
-    service.spreadsheets().batchUpdate(
+    for s in meta["sheets"]:
+        if s["properties"]["title"] == title:
+            return s["properties"]["sheetId"]
+    response = service.spreadsheets().batchUpdate(
         spreadsheetId=spreadsheet_id,
         body={"requests": [{"addSheet": {"properties": {"title": title}}}]},
     ).execute()
+    return response["replies"][0]["addSheet"]["properties"]["sheetId"]
 
 
-def _write_sheet(sheet_name: str, header: list[str], rows: list[list]) -> None:
+def _apply_formatting(
+    service,
+    spreadsheet_id: str,
+    sheet_id: int,
+    num_cols: int,
+    num_data_rows: int,
+    currency_cols: tuple[int, ...],
+    kcal_cols: tuple[int, ...],
+    bold_last_row: bool,
+) -> None:
+    requests = [
+        {
+            "updateSheetProperties": {
+                "properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}},
+                "fields": "gridProperties.frozenRowCount",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1,
+                    "startColumnIndex": 0, "endColumnIndex": num_cols,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": HEADER_BG,
+                        "textFormat": {"foregroundColor": HEADER_FG, "bold": True},
+                    }
+                },
+                "fields": "userEnteredFormat(backgroundColor,textFormat)",
+            }
+        },
+        {
+            "autoResizeDimensions": {
+                "dimensions": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": num_cols}
+            }
+        },
+    ]
+
+    data_end_row = num_data_rows + 1  # +1 for the header row already occupying row 0
+    for col in (*currency_cols, *kcal_cols):
+        pattern = '#,##0 "Kč"' if col in currency_cols else '#,##0 "kcal"'
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id, "startRowIndex": 1, "endRowIndex": data_end_row,
+                        "startColumnIndex": col, "endColumnIndex": col + 1,
+                    },
+                    "cell": {"userEnteredFormat": {"numberFormat": {"type": "NUMBER", "pattern": pattern}}},
+                    "fields": "userEnteredFormat.numberFormat",
+                }
+            }
+        )
+
+    if bold_last_row and num_data_rows > 0:
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id, "startRowIndex": num_data_rows, "endRowIndex": data_end_row,
+                        "startColumnIndex": 0, "endColumnIndex": num_cols,
+                    },
+                    "cell": {"userEnteredFormat": {"backgroundColor": TOTAL_BG, "textFormat": {"bold": True}}},
+                    "fields": "userEnteredFormat(backgroundColor,textFormat)",
+                }
+            }
+        )
+
+    service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": requests}).execute()
+
+
+def _write_sheet(
+    sheet_name: str,
+    header: list[str],
+    rows: list[list],
+    *,
+    currency_cols: tuple[int, ...] = (),
+    kcal_cols: tuple[int, ...] = (),
+    bold_last_row: bool = False,
+) -> None:
     service = _get_service()
     if service is None:
         return
 
     spreadsheet_id = settings.google_sheets_spreadsheet_id
-    _ensure_tab_exists(service, spreadsheet_id, sheet_name)
+    sheet_id = _ensure_tab_exists(service, spreadsheet_id, sheet_name)
 
     # Clear first -- a plain values().update() only overwrites the cells it
     # addresses, so a sync with fewer rows than last time would otherwise
@@ -87,6 +173,8 @@ def _write_sheet(sheet_name: str, header: list[str], rows: list[list]) -> None:
         valueInputOption="RAW",
         body={"values": [header] + rows},
     ).execute()
+
+    _apply_formatting(service, spreadsheet_id, sheet_id, len(header), len(rows), currency_cols, kcal_cols, bold_last_row)
 
 
 def sync_menu(db: Session) -> None:
@@ -102,6 +190,8 @@ def sync_menu(db: Session) -> None:
         "menu",
         ["week_start", "day", "category", "item_name", "description", "price_czk", "calories_kcal", "parsed_at"],
         rows,
+        currency_cols=(5,),
+        kcal_cols=(6,),
     )
 
 
@@ -125,6 +215,7 @@ def sync_orders(db: Session) -> None:
         "orders",
         ["user", "order_date", "item_name", "quantity", "unit_price_czk", "note", "submitted_at", "week_start"],
         rows,
+        currency_cols=(4,),
     )
 
 
@@ -159,6 +250,9 @@ def sync_dashboard(db: Session) -> None:
             "daily_total_kcal", "week_total_kcal", "month_total_kcal",
         ],
         rows,
+        currency_cols=(3, 4, 5),
+        kcal_cols=(6, 7, 8),
+        bold_last_row=True,
     )
 
 
