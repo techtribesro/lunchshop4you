@@ -246,6 +246,7 @@
           <button class="btn-primary btn-danger" type="button" id="admin-clear-menu">Vynutit smazání menu (tento týden)</button>
           <button class="btn-primary" type="button" id="admin-send-summary">Odeslat dnešní objednávku</button>
           <button class="btn-primary" type="button" id="admin-send-telegram">Odeslat jen Telegram</button>
+          <button class="btn-primary" type="button" id="admin-sync-sheets">Synchronizovat Google Sheets</button>
           <p class="submit-status" id="admin-action-status"></p>
         </div>
       </div>
@@ -919,6 +920,21 @@
         statusEl.className = "submit-status ok";
       } else {
         statusEl.textContent = body.detail || "Odeslání se nezdařilo.";
+        statusEl.className = "submit-status error";
+      }
+    });
+
+    document.getElementById("admin-sync-sheets").addEventListener("click", async () => {
+      const statusEl = document.getElementById("admin-action-status");
+      statusEl.textContent = "Synchronizuji...";
+      statusEl.className = "submit-status";
+      const resp = await fetch("/admin/sync-sheets", { method: "POST" });
+      const body = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        statusEl.textContent = "Google Sheets synchronizováno.";
+        statusEl.className = "submit-status ok";
+      } else {
+        statusEl.textContent = body.detail || "Synchronizace se nezdařila.";
         statusEl.className = "submit-status error";
       }
     });

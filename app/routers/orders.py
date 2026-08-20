@@ -5,6 +5,7 @@ from app.auth import get_current_user
 from app.db import get_db
 from app.models import MenuItem, Order, User
 from app.schemas import OrderLineOut, OrderSubmitRequest
+from app.services.sheets_sync import sync_all
 from app.timezone import today_local, week_start
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -67,6 +68,7 @@ def submit_order(
     ]
     db.add_all(new_orders)
     db.commit()
+    sync_all(db)
 
     return db.query(Order).filter(Order.user_id == user.id, Order.order_date == target_date).all()
 

@@ -20,7 +20,7 @@ from app.schemas import (
 )
 from app.services.email_poller import EmailPollError, refresh_menu
 from app.services.order_summary import OrderSummaryError, send_daily_order_summary, send_telegram_only
-from app.services.sheets_sync import sync_all
+from app.services.sheets_sync import sync_all, sync_dashboard, sync_menu, sync_orders
 from app.services.telegram_notify import TelegramError
 from app.timezone import week_start
 
@@ -181,6 +181,7 @@ def assign_order(
     ]
     db.add_all(new_orders)
     db.commit()
+    _sync_all_best_effort(db)
 
     return db.query(Order).filter(Order.user_id == target_user.id, Order.order_date == payload.order_date).all()
 
@@ -195,7 +196,28 @@ def clear_orders_for_date(
     data, independent of the normal per-user order flow."""
     deleted = db.query(Order).filter(Order.order_date == order_date).delete()
     db.commit()
+    _sync_all_best_effort(db)
     return {"orders_deleted": deleted}
+
+
+@router.post("/sync-sheets")
+def sync_sheets(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Manually triggers a full Google Sheets sync (menu/orders/dashboard) --
+    for backfilling the sheet after the fact or confirming sync is actually
+    working, without waiting for the next order/menu write. Unlike the
+    best-effort sync used elsewhere, failures here are surfaced to the
+    caller instead of being swallowed."""
+    try:
+        sync_menu(db)
+        sync_orders(db)
+        sync_dashboard(db)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Sheets sync failed: {exc}") from exc
+
+    return {"synced": True}
 
 
 @router.post("/send-order-summary")

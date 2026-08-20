@@ -166,7 +166,8 @@ alters existing ones.
 ### Google Sheets — reporting mirror (not the datastore)
 
 `app/services/sheets_sync.py` pushes one-way snapshots of `menu`, `orders`, and a
-computed `dashboard` tab to a Google Sheet after every menu parse, using the shared
+computed `dashboard` tab to a Google Sheet after every menu parse and every order
+write (user submits/edits an order, or an admin assigns/clears one), using the shared
 `compute_dashboard()` logic from §3. Each sync clears and rewrites all three tabs — no
 stale rows, no incremental diffing. The app **never reads back** from Sheets; it exists
 purely so the data is human-browsable/auditable outside the app.
