@@ -1,18 +1,17 @@
-"""LLM-based menu PDF extraction. The vendor's PDF text-stream order is
-unreliable (see email_poller._extract_menu_text_from_pdf), so instead of
-relying purely on layout heuristics, the PDF's extracted text is handed to
-the LLM with an explicit JSON shape to fill in. This is the primary
-extraction path when GROQ_API_KEY is configured; refresh_menu() falls back
-to the regex parser on any failure here, since the LLM path is inherently
-non-deterministic.
+"""LLM-based menu PDF extraction. pdfplumber's position-aware extraction
+(see _pdf_text) reconstructs this vendor's PDFs in correct reading order, so
+the LLM just needs to structure already-well-ordered text into JSON. This is
+the primary extraction path when GROQ_API_KEY is configured; refresh_menu()
+falls back to the regex parser on any failure here, since the LLM path is
+inherently non-deterministic.
 """
 
 import logging
 import re
 from datetime import date
-
-from pypdf import PdfReader
 from io import BytesIO
+
+import pdfplumber
 
 from app.services.llm_client import LLMError, generate_json
 from app.services.menu_parser import ParsedMenuItem
@@ -31,9 +30,7 @@ PROMPT_TEMPLATE = """This is the extracted text of a Czech restaurant's weekly
 lunch menu PDF, laid out with a day header (PONDĚLÍ=Monday, ÚTERÝ=Tuesday,
 STŘEDA=Wednesday, ČTVRTEK=Thursday, PÁTEK=Friday) followed by category lines:
 Polévka (soup), Hlavní jídlo 1-3 (main 1-3), Vege. jídlo (vegetarian). Not
-every day has every category. The text extraction may have scrambled the
-original layout order to some degree -- use context to reconstruct which day
-and category each item belongs to.
+every day has every category.
 
 Menu text:
 {menu_text}
@@ -58,8 +55,12 @@ class MenuExtractionError(Exception):
 
 
 def _pdf_text(pdf_bytes: bytes) -> str:
-    reader = PdfReader(BytesIO(pdf_bytes))
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    """pypdf's raw stream-order extraction badly scrambles this vendor's
+    PDFs (columns/rows end up flattened out of order); pdfplumber's
+    position-aware extraction reconstructs the actual visual reading order
+    correctly."""
+    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+        return "\n".join(page.extract_text() or "" for page in pdf.pages)
 
 
 def extract_pdf_week_start(pdf_bytes: bytes) -> date | None:
