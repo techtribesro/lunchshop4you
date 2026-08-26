@@ -158,7 +158,7 @@ def find_pdf_for_week(target_week_start: date) -> bytes:
         if not pdf_bytes:
             continue
         found_week = extract_pdf_week_start(pdf_bytes)
-        logger.info(
+        logger.warning(
             "find_pdf_for_week: candidate subject=%r size=%d bytes -> week=%s (target=%s)",
             _decode_header_value(msg.get("Subject")), len(pdf_bytes), found_week, target_week_start,
         )

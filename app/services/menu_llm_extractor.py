@@ -70,7 +70,7 @@ def extract_pdf_week_start(pdf_bytes: bytes) -> date | None:
     week's menu several days early."""
     compact = re.sub(r"\s+", "", _pdf_text(pdf_bytes))
     all_matches = list(WEEK_RANGE_RE.finditer(compact))
-    logger.info(
+    logger.warning(
         "extract_pdf_week_start: %d match(es) in %d-char compact text; compact[:400]=%r",
         len(all_matches), len(compact), compact[:400],
     )
