@@ -72,12 +72,15 @@ def _find_pdf_attachment(msg: email.message.Message) -> bytes | None:
     return None
 
 
-def fetch_recent_menu_sources(limit: int = RECENT_MENU_EMAILS_TO_PROCESS) -> list[tuple[str, bytes | str]]:
-    """Connects via IMAP and scans the most recent inbox messages (newest
-    first, optionally filtered by MENU_EMAIL_SENDER) for up to `limit` that
-    have a PDF attachment or plain-text body that looks like a menu.
-    Returns a list of ("pdf", pdf_bytes) / ("text", body) tuples, newest
-    first."""
+def _iter_recent_messages():
+    """Connects via IMAP and yields the most recent inbox messages (newest
+    first, up to MAX_MESSAGES_TO_SCAN, filtered by MENU_EMAIL_SENDER if
+    set) as parsed email.message.Message objects. Shared scanning core for
+    both fetch_recent_menu_sources (the normal path) and find_pdf_for_week
+    (the explicit-target path) -- factored out so the latter can keep
+    looking past a message that isn't a matching PDF instead of stopping
+    at the first message of any kind, which is what silently let a stray
+    plain-text email block ever finding the real PDF (see refresh_menu)."""
     if not settings.gmail_imap_user or not settings.gmail_imap_password:
         raise EmailPollError("Gmail IMAP credentials are not configured")
 
@@ -92,11 +95,7 @@ def fetch_recent_menu_sources(limit: int = RECENT_MENU_EMAILS_TO_PROCESS) -> lis
 
         ids = data[0].split()[-MAX_MESSAGES_TO_SCAN:]
 
-        sources: list[tuple[str, bytes | str]] = []
         for msg_id in reversed(ids):
-            if len(sources) >= limit:
-                break
-
             status, msg_data = conn.fetch(msg_id, "(RFC822)")
             if status != "OK" or not msg_data or not msg_data[0]:
                 continue
@@ -106,24 +105,65 @@ def fetch_recent_menu_sources(limit: int = RECENT_MENU_EMAILS_TO_PROCESS) -> lis
                 sender = msg.get("From") or ""
                 if settings.menu_email_sender.lower() not in sender.lower():
                     continue
-
-            pdf_bytes = _find_pdf_attachment(msg)
-            if pdf_bytes:
-                sources.append(("pdf", pdf_bytes))
-                continue
-
-            body = _extract_body(msg)
-            if body.strip():
-                sources.append(("text", body))
-
-        if not sources:
-            raise EmailPollError("No menu email with a PDF attachment or text body found")
-        return sources
+            yield msg
     finally:
         try:
             conn.logout()
         except Exception:
             pass
+
+
+def fetch_recent_menu_sources(limit: int = RECENT_MENU_EMAILS_TO_PROCESS) -> list[tuple[str, bytes | str]]:
+    """Scans recent inbox messages (see _iter_recent_messages) for up to
+    `limit` that have a PDF attachment or plain-text body that looks like
+    a menu. Returns a list of ("pdf", pdf_bytes) / ("text", body) tuples,
+    newest first."""
+    sources: list[tuple[str, bytes | str]] = []
+    for msg in _iter_recent_messages():
+        if len(sources) >= limit:
+            break
+
+        pdf_bytes = _find_pdf_attachment(msg)
+        if pdf_bytes:
+            sources.append(("pdf", pdf_bytes))
+            continue
+
+        body = _extract_body(msg)
+        if body.strip():
+            sources.append(("text", body))
+
+    if not sources:
+        raise EmailPollError("No menu email with a PDF attachment or text body found")
+    return sources
+
+
+def find_pdf_for_week(target_week_start: date) -> bytes:
+    """Scans recent inbox messages for a PDF whose own "Týden ..." footer
+    confirms it's for target_week_start -- ignoring any non-PDF messages
+    entirely (a text-fallback source has no footer, so there's nothing to
+    verify) rather than letting the first message found, of any kind,
+    stand in for "the menu". extract_pdf_week_start requires pdfplumber to
+    have actually extracted readable structure from the PDF in the first
+    place (empty/garbled extraction means the footer regex won't match
+    either), so a returned match is also implicitly a structure check, not
+    just a date check.
+
+    Raises EmailPollError if no matching PDF turns up in the scanned
+    window -- that week's real menu genuinely hasn't arrived yet, which is
+    a legitimate outcome to report, not a bug to paper over by falling
+    back to whatever's newest (that fallback is exactly what caused the
+    production incident this function replaces)."""
+    for msg in _iter_recent_messages():
+        pdf_bytes = _find_pdf_attachment(msg)
+        if not pdf_bytes:
+            continue
+        if extract_pdf_week_start(pdf_bytes) == target_week_start:
+            return pdf_bytes
+
+    raise EmailPollError(
+        f"No PDF menu found for the week of {target_week_start} in the last "
+        f"{MAX_MESSAGES_TO_SCAN} inbox messages -- it hasn't arrived yet"
+    )
 
 
 def _parse_menu_source(kind: str, payload: bytes | str) -> list:
@@ -171,17 +211,18 @@ def refresh_menu(db: Session, target_week_start: date | None = None) -> int:
     """Fetches and bulk-replaces menu weeks from the inbox.
 
     With target_week_start given explicitly (e.g. an admin force-parsing a
-    specific week from the admin panel), only the single newest menu email
-    is used -- but it's still checked against its own "Týden ..." footer
-    (when it's a PDF) before being stored. This used to trust the caller's
-    target_week_start blindly, which meant force-parsing "next week" before
-    next week's email had actually arrived would silently grab this week's
-    email again and duplicate it under next week's date -- a real incident,
-    not a hypothetical one. Now it raises instead of storing a mismatch. A
-    text-fallback source has no footer to check (see extract_pdf_week_start,
-    PDF-only) and a PDF whose footer can't be parsed falls back to trusting
-    the caller, same as before -- both are pre-existing edge cases, not
-    changed here.
+    specific week from the admin panel), find_pdf_for_week searches recent
+    inbox messages for a PDF whose own "Týden ..." footer actually confirms
+    it's for that week, raising if none is found rather than falling back
+    to whatever's newest. This used to just grab the single newest message
+    of any kind and trust the caller's target_week_start blindly -- which
+    meant force-parsing "next week" before next week's real menu had
+    arrived would silently duplicate whatever was newest (a mismatched PDF,
+    or even a stray plain-text email with no week info at all) under next
+    week's date. Confirmed as a real production incident, not a
+    hypothetical one -- it took two rounds to actually close, since the
+    first fix only checked a PDF's footer and a plain-text message was
+    still slipping past that check entirely.
 
     Otherwise (the normal scheduled/gap-check path), the last
     RECENT_MENU_EMAILS_TO_PROCESS menu emails are each parsed and stored
@@ -198,16 +239,8 @@ def refresh_menu(db: Session, target_week_start: date | None = None) -> int:
     LLM request instead of two. The plain-text fallback path has no LLM
     call to piggyback on, so it estimates calories separately."""
     if target_week_start is not None:
-        kind, payload = fetch_recent_menu_sources(limit=1)[0]
-        if kind == "pdf":
-            actual_week = extract_pdf_week_start(payload)
-            logger.info("force-parse target=%s actual_week_from_pdf=%s", target_week_start, actual_week)
-            if actual_week is not None and actual_week != target_week_start:
-                raise EmailPollError(
-                    f"Newest menu email is for the week of {actual_week}, not "
-                    f"{target_week_start} -- that week's menu hasn't arrived yet"
-                )
-        parsed_items = _parse_menu_source(kind, payload)
+        pdf_bytes = find_pdf_for_week(target_week_start)
+        parsed_items = _parse_menu_source("pdf", pdf_bytes)
         _store_week(db, target_week_start, parsed_items)
         return len(parsed_items)
 
