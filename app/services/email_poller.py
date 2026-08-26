@@ -201,6 +201,7 @@ def refresh_menu(db: Session, target_week_start: date | None = None) -> int:
         kind, payload = fetch_recent_menu_sources(limit=1)[0]
         if kind == "pdf":
             actual_week = extract_pdf_week_start(payload)
+            logger.info("force-parse target=%s actual_week_from_pdf=%s", target_week_start, actual_week)
             if actual_week is not None and actual_week != target_week_start:
                 raise EmailPollError(
                     f"Newest menu email is for the week of {actual_week}, not "
