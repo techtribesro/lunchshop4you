@@ -8,6 +8,8 @@ non-deterministic.
 """
 
 import logging
+import re
+from datetime import date
 
 from pypdf import PdfReader
 from io import BytesIO
@@ -16,6 +18,11 @@ from app.services.llm_client import LLMError, generate_json
 from app.services.menu_parser import ParsedMenuItem
 
 logger = logging.getLogger("menu_llm_extractor")
+
+# Matches the vendor's own "Týden 24.8. - 28.8.2026" footer line. Extraction
+# scrambles spacing arbitrarily (single letters can end up space-separated),
+# so this is matched against the whitespace-stripped text, not the raw text.
+WEEK_RANGE_RE = re.compile(r"T[ýy]den(\d{1,2})\.(\d{1,2})\.-(\d{1,2})\.(\d{1,2})\.(\d{4})")
 
 VALID_DAYS = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}
 VALID_CATEGORIES = {"Polévka", "Hlavní jídlo 1", "Hlavní jídlo 2", "Hlavní jídlo 3", "Vege. jídlo"}
@@ -53,6 +60,23 @@ class MenuExtractionError(Exception):
 def _pdf_text(pdf_bytes: bytes) -> str:
     reader = PdfReader(BytesIO(pdf_bytes))
     return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+def extract_pdf_week_start(pdf_bytes: bytes) -> date | None:
+    """Reads the vendor's own "Týden D.M. - D.M.YYYY" footer to find which
+    Monday this menu is actually for -- more reliable than guessing from
+    which day the email arrived, since the vendor sometimes sends next
+    week's menu several days early."""
+    compact = re.sub(r"\s+", "", _pdf_text(pdf_bytes))
+    m = WEEK_RANGE_RE.search(compact)
+    if not m:
+        return None
+    start_day, start_month, _end_day, end_month, end_year = (int(g) for g in m.groups())
+    start_year = end_year - 1 if start_month > end_month else end_year
+    try:
+        return date(start_year, start_month, start_day)
+    except ValueError:
+        return None
 
 
 def extract_menu_with_llm(pdf_bytes: bytes) -> list[ParsedMenuItem]:
