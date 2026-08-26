@@ -9,11 +9,20 @@ NEXT_WEEK = date(2026, 8, 31)
 THIS_WEEK = date(2026, 8, 24)
 
 
-def _msg(has_pdf: bool):
+class _FakeMessage:
     """A stand-in for email.message.Message -- find_pdf_for_week only ever
-    passes these to _find_pdf_attachment, which is mocked directly below,
-    so the object's own identity is all that matters for these tests."""
-    return object() if has_pdf else "no-pdf-marker"
+    passes these to the mocked _find_pdf_attachment and reads .get("Subject")
+    for logging, so identity plus a minimal .get() is all these tests need."""
+
+    def __init__(self, has_pdf: bool):
+        self.has_pdf = has_pdf
+
+    def get(self, _key, default=None):
+        return default
+
+
+def _msg(has_pdf: bool):
+    return _FakeMessage(has_pdf)
 
 
 def test_find_pdf_for_week_skips_non_matching_and_non_pdf_messages():

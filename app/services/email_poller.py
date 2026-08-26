@@ -157,7 +157,12 @@ def find_pdf_for_week(target_week_start: date) -> bytes:
         pdf_bytes = _find_pdf_attachment(msg)
         if not pdf_bytes:
             continue
-        if extract_pdf_week_start(pdf_bytes) == target_week_start:
+        found_week = extract_pdf_week_start(pdf_bytes)
+        logger.info(
+            "find_pdf_for_week: candidate subject=%r size=%d bytes -> week=%s (target=%s)",
+            _decode_header_value(msg.get("Subject")), len(pdf_bytes), found_week, target_week_start,
+        )
+        if found_week == target_week_start:
             return pdf_bytes
 
     raise EmailPollError(
