@@ -69,11 +69,6 @@ def extract_pdf_week_start(pdf_bytes: bytes) -> date | None:
     which day the email arrived, since the vendor sometimes sends next
     week's menu several days early."""
     compact = re.sub(r"\s+", "", _pdf_text(pdf_bytes))
-    all_matches = list(WEEK_RANGE_RE.finditer(compact))
-    logger.warning(
-        "extract_pdf_week_start: %d match(es) in %d-char compact text; compact[:400]=%r",
-        len(all_matches), len(compact), compact[:400],
-    )
     m = WEEK_RANGE_RE.search(compact)
     if not m:
         return None
@@ -90,15 +85,11 @@ def extract_menu_with_llm(pdf_bytes: bytes) -> list[ParsedMenuItem]:
     if not menu_text.strip():
         raise MenuExtractionError("No extractable text found in menu PDF")
 
-    logger.warning("extract_menu_with_llm: menu_text[:300]=%r", menu_text[:300])
-
     prompt = PROMPT_TEMPLATE.format(menu_text=menu_text)
     try:
         data = generate_json(prompt)
     except LLMError as exc:
         raise MenuExtractionError(str(exc)) from exc
-
-    logger.warning("extract_menu_with_llm: raw Groq response=%r", data)
 
     raw_items = data if isinstance(data, list) else data.get("items", [])
 
