@@ -66,15 +66,21 @@ def parse_menu(
 
 @router.post("/clear-menu")
 def clear_menu(
+    for_next_week: bool = False,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """Wipes the current week's menu without re-fetching -- for clearing a
-    bad parse before retrying, independent of the email pipeline."""
-    deleted = db.query(MenuItem).filter(MenuItem.week_start == week_start()).delete()
+    """Wipes a week's menu without re-fetching -- for clearing a bad parse
+    (or a wrongly-duplicated week, see refresh_menu's target_week_start
+    guard) before retrying, independent of the email pipeline. Mirrors
+    /admin/parse-menu's for_next_week flag -- previously this could only
+    ever target the current week, with no way to clear next week's data
+    short of a direct DB edit."""
+    target = week_start() + timedelta(days=7) if for_next_week else week_start()
+    deleted = db.query(MenuItem).filter(MenuItem.week_start == target).delete()
     db.commit()
     _sync_all_best_effort(db)
-    return {"items_deleted": deleted}
+    return {"items_deleted": deleted, "week_start": target.isoformat()}
 
 
 @router.post("/menu/calories")
