@@ -172,8 +172,16 @@ def refresh_menu(db: Session, target_week_start: date | None = None) -> int:
 
     With target_week_start given explicitly (e.g. an admin force-parsing a
     specific week from the admin panel), only the single newest menu email
-    is used, stored under that exact week regardless of what the PDF itself
-    says -- this is the explicit-override path.
+    is used -- but it's still checked against its own "Týden ..." footer
+    (when it's a PDF) before being stored. This used to trust the caller's
+    target_week_start blindly, which meant force-parsing "next week" before
+    next week's email had actually arrived would silently grab this week's
+    email again and duplicate it under next week's date -- a real incident,
+    not a hypothetical one. Now it raises instead of storing a mismatch. A
+    text-fallback source has no footer to check (see extract_pdf_week_start,
+    PDF-only) and a PDF whose footer can't be parsed falls back to trusting
+    the caller, same as before -- both are pre-existing edge cases, not
+    changed here.
 
     Otherwise (the normal scheduled/gap-check path), the last
     RECENT_MENU_EMAILS_TO_PROCESS menu emails are each parsed and stored
@@ -191,6 +199,13 @@ def refresh_menu(db: Session, target_week_start: date | None = None) -> int:
     call to piggyback on, so it estimates calories separately."""
     if target_week_start is not None:
         kind, payload = fetch_recent_menu_sources(limit=1)[0]
+        if kind == "pdf":
+            actual_week = extract_pdf_week_start(payload)
+            if actual_week is not None and actual_week != target_week_start:
+                raise EmailPollError(
+                    f"Newest menu email is for the week of {actual_week}, not "
+                    f"{target_week_start} -- that week's menu hasn't arrived yet"
+                )
         parsed_items = _parse_menu_source(kind, payload)
         _store_week(db, target_week_start, parsed_items)
         return len(parsed_items)
