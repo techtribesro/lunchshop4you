@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
 
-    gemini_api_key: str = ""
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
 
     session_secret: str = "change-me"
     session_idle_timeout_hours: int = 24

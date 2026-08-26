@@ -83,9 +83,9 @@ def set_menu_calories(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """Manual kcal backfill for the current week's menu, bypassing Gemini --
-    for filling in estimates without spending free-tier quota (e.g. when the
-    menu was parsed before the kcal-in-extraction feature existed)."""
+    """Manual kcal backfill for the current week's menu, bypassing the LLM --
+    for filling in estimates without an extra API call (e.g. when the menu
+    was parsed before the kcal-in-extraction feature existed)."""
     current_week = week_start()
     updated = 0
     for entry in payload.items:

@@ -1,28 +1,38 @@
 """LLM-based menu PDF extraction. The vendor's PDF text-stream order is
 unreliable (see email_poller._extract_menu_text_from_pdf), so instead of
-relying purely on layout heuristics, the PDF is handed directly to Gemini
-with a structured JSON schema. This is the primary extraction path when
-GEMINI_API_KEY is configured; refresh_menu() falls back to the regex parser
-on any failure here, since the LLM path is inherently non-deterministic.
+relying purely on layout heuristics, the PDF's extracted text is handed to
+the LLM with an explicit JSON shape to fill in. This is the primary
+extraction path when GROQ_API_KEY is configured; refresh_menu() falls back
+to the regex parser on any failure here, since the LLM path is inherently
+non-deterministic.
 """
 
-import base64
 import logging
 
-from app.services.gemini_client import GeminiError, generate_json
+from pypdf import PdfReader
+from io import BytesIO
+
+from app.services.llm_client import LLMError, generate_json
 from app.services.menu_parser import ParsedMenuItem
 
-logger = logging.getLogger("gemini_extractor")
+logger = logging.getLogger("menu_llm_extractor")
 
 VALID_DAYS = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}
 VALID_CATEGORIES = {"Polévka", "Hlavní jídlo 1", "Hlavní jídlo 2", "Hlavní jídlo 3", "Vege. jídlo"}
 
-PROMPT = """This PDF is a Czech restaurant's weekly lunch menu, laid out with a
-day header (PONDĚLÍ=Monday, ÚTERÝ=Tuesday, STŘEDA=Wednesday, ČTVRTEK=Thursday,
-PÁTEK=Friday) followed by category lines: Polévka (soup), Hlavní jídlo 1-3
-(main 1-3), Vege. jídlo (vegetarian). Not every day has every category.
+PROMPT_TEMPLATE = """This is the extracted text of a Czech restaurant's weekly
+lunch menu PDF, laid out with a day header (PONDĚLÍ=Monday, ÚTERÝ=Tuesday,
+STŘEDA=Wednesday, ČTVRTEK=Thursday, PÁTEK=Friday) followed by category lines:
+Polévka (soup), Hlavní jídlo 1-3 (main 1-3), Vege. jídlo (vegetarian). Not
+every day has every category. The text extraction may have scrambled the
+original layout order to some degree -- use context to reconstruct which day
+and category each item belongs to.
 
-Extract every item as an object with:
+Menu text:
+{menu_text}
+
+Return JSON only, as an object {{"items": [...]}}. Extract every item as an
+object with:
 - day: the English weekday name (Monday..Friday)
 - category: exactly one of "Polévka", "Hlavní jídlo 1", "Hlavní jídlo 2", "Hlavní jídlo 3", "Vege. jídlo"
 - item_name: the dish name in Czech, without allergen codes like (1,3,7)
@@ -35,41 +45,28 @@ Extract every item as an object with:
 
 Ignore the allergen legend, opening hours, and any text that isn't a menu item."""
 
-RESPONSE_SCHEMA = {
-    "type": "ARRAY",
-    "items": {
-        "type": "OBJECT",
-        "properties": {
-            "day": {"type": "STRING"},
-            "category": {"type": "STRING"},
-            "item_name": {"type": "STRING"},
-            "description": {"type": "STRING"},
-            "price_czk": {"type": "INTEGER"},
-            "calories_kcal": {"type": "INTEGER"},
-        },
-        "required": ["day", "category", "item_name", "price_czk", "calories_kcal"],
-    },
-}
 
-
-class GeminiExtractionError(Exception):
+class MenuExtractionError(Exception):
     pass
 
 
-def extract_menu_with_gemini(pdf_bytes: bytes) -> list[ParsedMenuItem]:
-    parts = [
-        {
-            "inline_data": {
-                "mime_type": "application/pdf",
-                "data": base64.b64encode(pdf_bytes).decode("ascii"),
-            }
-        },
-        {"text": PROMPT},
-    ]
+def _pdf_text(pdf_bytes: bytes) -> str:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+def extract_menu_with_llm(pdf_bytes: bytes) -> list[ParsedMenuItem]:
+    menu_text = _pdf_text(pdf_bytes)
+    if not menu_text.strip():
+        raise MenuExtractionError("No extractable text found in menu PDF")
+
+    prompt = PROMPT_TEMPLATE.format(menu_text=menu_text)
     try:
-        raw_items = generate_json(parts, RESPONSE_SCHEMA)
-    except GeminiError as exc:
-        raise GeminiExtractionError(str(exc)) from exc
+        data = generate_json(prompt)
+    except LLMError as exc:
+        raise MenuExtractionError(str(exc)) from exc
+
+    raw_items = data if isinstance(data, list) else data.get("items", [])
 
     items: list[ParsedMenuItem] = []
     for raw in raw_items:
@@ -99,6 +96,6 @@ def extract_menu_with_gemini(pdf_bytes: bytes) -> list[ParsedMenuItem]:
         )
 
     if not items:
-        raise GeminiExtractionError("Gemini returned no valid menu items")
+        raise MenuExtractionError("LLM returned no valid menu items")
 
     return items

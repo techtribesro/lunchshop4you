@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import MenuItem
 from app.services.calorie_estimator import estimate_calories
-from app.services.gemini_extractor import GeminiExtractionError, extract_menu_with_gemini
+from app.services.menu_llm_extractor import MenuExtractionError, extract_menu_with_llm
 from app.services.menu_parser import MenuParseError, parse_menu_email
 from app.timezone import menu_target_week_start, now_local_naive
 
@@ -111,20 +111,19 @@ def refresh_menu(db: Session, target_week_start: date | None = None) -> int:
     upcoming week on a weekend call) unless target_week_start is given
     explicitly -- e.g. an admin force-parsing a next-week menu that arrived
     early, mid-week.
-    Returns the number of items stored. PDF attachments are parsed by
-    Gemini directly (see gemini_extractor), which estimates calories in the
-    same call -- one Gemini request instead of two, which matters on the
-    20-req/day free tier. The plain-text fallback path has no Gemini call
-    to piggyback on, so it estimates calories separately. Prices are then
-    adjusted for the office's standing non-soup discount (see
-    NON_SOUP_DISCOUNT_CZK)."""
+    Returns the number of items stored. PDF attachments are parsed by the
+    LLM directly (see menu_llm_extractor), which estimates calories in the
+    same call -- one LLM request instead of two. The plain-text fallback
+    path has no LLM call to piggyback on, so it estimates calories
+    separately. Prices are then adjusted for the office's standing non-soup
+    discount (see NON_SOUP_DISCOUNT_CZK)."""
     kind, payload = fetch_latest_menu_source()
 
     if kind == "pdf":
         try:
-            parsed_items = extract_menu_with_gemini(payload)
-        except GeminiExtractionError as exc:
-            raise EmailPollError(f"Gemini menu extraction failed: {exc}") from exc
+            parsed_items = extract_menu_with_llm(payload)
+        except MenuExtractionError as exc:
+            raise EmailPollError(f"Menu extraction failed: {exc}") from exc
     else:
         try:
             parsed_items = parse_menu_email(payload)

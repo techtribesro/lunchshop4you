@@ -1,10 +1,10 @@
-"""Estimates calories per menu item via Gemini, since the vendor menu has
-no nutritional info -- one batched call per weekly parse (all items at
-once) rather than one call per dish."""
+"""Estimates calories per menu item via the configured LLM (Groq), since the
+vendor menu has no nutritional info -- one batched call per weekly parse
+(all items at once) rather than one call per dish."""
 
 import logging
 
-from app.services.gemini_client import GeminiError, generate_json
+from app.services.llm_client import LLMError, generate_json
 from app.services.menu_parser import ParsedMenuItem
 
 logger = logging.getLogger("calorie_estimator")
@@ -17,25 +17,14 @@ reasonable estimate -- exact values aren't expected.
 Dishes (index: name -- description):
 {dish_list}
 
-Return a JSON array with one object per dish, in the same order, each with:
+Return JSON only, as an object {{"items": [...]}} with one object per dish,
+in the same order, each with:
 - "index": the integer index shown above
 - "calories_kcal": your best-estimate integer calorie count for one portion"""
 
-RESPONSE_SCHEMA = {
-    "type": "ARRAY",
-    "items": {
-        "type": "OBJECT",
-        "properties": {
-            "index": {"type": "INTEGER"},
-            "calories_kcal": {"type": "INTEGER"},
-        },
-        "required": ["index", "calories_kcal"],
-    },
-}
-
 
 def estimate_calories(items: list[ParsedMenuItem]) -> dict[str, int]:
-    """Returns {item_name: calories_kcal} for as many items as Gemini
+    """Returns {item_name: calories_kcal} for as many items as the LLM
     successfully estimated. Missing entries (on any failure) just mean the
     caller leaves calories_kcal as None for those dishes -- non-fatal."""
     if not items:
@@ -48,10 +37,12 @@ def estimate_calories(items: list[ParsedMenuItem]) -> dict[str, int]:
     prompt = PROMPT_TEMPLATE.format(dish_list=dish_list)
 
     try:
-        raw = generate_json([{"text": prompt}], RESPONSE_SCHEMA)
-    except GeminiError as exc:
+        data = generate_json(prompt)
+    except LLMError as exc:
         logger.warning("Calorie estimation failed (%s); leaving calories unset", exc)
         return {}
+
+    raw = data if isinstance(data, list) else data.get("items", [])
 
     result: dict[str, int] = {}
     for entry in raw:

@@ -20,10 +20,9 @@ from app.timezone import today_local
 
 logger = logging.getLogger("order_summary")
 
-# Static rather than Gemini-generated: this email sends automatically every
-# weekday, and the free-tier Gemini quota (20 requests/day, shared with menu
-# parsing and calorie estimation) is too tight to spend one call a day on a
-# greeting. Not fully correct Czech vocative case for an arbitrary name, but
+# Static rather than LLM-generated: no need to spend an API call on a
+# greeting that never changes. Not fully correct Czech vocative case for an
+# arbitrary name, but
 # ORDER_SUMMARY_RECIPIENT_NAME is fixed per deployment, so it only needs to
 # read right once.
 EMAIL_COPY = {
