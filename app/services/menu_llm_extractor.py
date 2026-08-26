@@ -90,11 +90,15 @@ def extract_menu_with_llm(pdf_bytes: bytes) -> list[ParsedMenuItem]:
     if not menu_text.strip():
         raise MenuExtractionError("No extractable text found in menu PDF")
 
+    logger.warning("extract_menu_with_llm: menu_text[:300]=%r", menu_text[:300])
+
     prompt = PROMPT_TEMPLATE.format(menu_text=menu_text)
     try:
         data = generate_json(prompt)
     except LLMError as exc:
         raise MenuExtractionError(str(exc)) from exc
+
+    logger.warning("extract_menu_with_llm: raw Groq response=%r", data)
 
     raw_items = data if isinstance(data, list) else data.get("items", [])
 
