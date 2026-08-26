@@ -21,6 +21,7 @@ primary_region = "fra"
   # `fly secrets set` (they're credentials).
   ADMIN_USERNAME = "yakob"
   TIMEZONE = "Europe/Prague"
+  GROQ_MODEL = "qwen/qwen3.8-27b"
 
 [mounts]
   source = "lunchshop_data"
