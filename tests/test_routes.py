@@ -12,11 +12,11 @@ rather than through the page it lands on.
 from app.auth import SESSION_COOKIE_NAME
 from tests.conftest import USER_PASSWORD
 
-# The current post-login destination. Task t3 inserts a mode chooser and will
-# change this to "/modes" in three coordinated places (pages.py login_page,
-# main.py root, login.html's JS). When that lands, this constant is the single
-# spot to update -- the surrounding assertions stay valid.
-POST_LOGIN_PATH = "/orders"
+# The post-login destination. t3 inserted the mode chooser and retargeted the
+# three coordinated sites (pages.py login_page, main.py root, login.html's JS),
+# so this is now "/modes". /orders remains directly reachable as a deep link --
+# see test_orders_renders_for_logged_in_user below and tests/test_modes.py.
+POST_LOGIN_PATH = "/modes"
 
 
 class TestAnonymousAccess:

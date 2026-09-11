@@ -109,6 +109,8 @@
   <div class="topbar">
     <div class="wordmark"><span class="glyph">Ob</span>ěd</div>
     <nav class="view-nav">
+      <!-- The mode chooser is not a one-time gate: this is the way back to it. -->
+      <a href="/modes">Výběr režimu</a>
       <button type="button" data-goto="order" aria-current="true">Objednávka</button>
       <button type="button" data-goto="dashboard">Přehled</button>
       {% if user.is_admin %}<button type="button" data-goto="admin">Admin</button>{% endif %}

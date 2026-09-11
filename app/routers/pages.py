@@ -20,6 +20,13 @@ templates = Jinja2Templates(directory="app/templates")
 _CSS_PATH = os.path.join(os.path.dirname(__file__), "..", "static", "css", "app.css")
 CSS_VERSION = str(int(os.path.getmtime(_CSS_PATH)))
 
+# Where a successful login (and a bare "/") sends the user. This is the mode
+# chooser, not the order grid: /orders stays directly reachable as a deep link.
+# Kept as a constant because main.py's root() references the same destination --
+# login.html's submit handler has its own copy in JS, which cannot import this
+# and must be kept in step by hand.
+POST_LOGIN_PATH = "/modes"
+
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 DAY_LABELS_CZ = {
     "Monday": "Pondělí",
@@ -33,8 +40,44 @@ DAY_LABELS_CZ = {
 @router.get("/login")
 def login_page(request: Request, user: User | None = Depends(get_current_user_optional)):
     if user is not None:
-        return RedirectResponse("/orders", status_code=303)
+        return RedirectResponse(POST_LOGIN_PATH, status_code=303)
     return templates.TemplateResponse(request, "login.html", {"css_version": CSS_VERSION})
+
+
+@router.get("/modes")
+def modes_page(request: Request, user: User | None = Depends(get_current_user_optional)):
+    """The mode chooser that sits between login and the order screen.
+
+    Deliberately NOT a one-time gate: it is a plain GET any logged-in user can
+    return to at any time (the order screen links back here), so it holds no
+    state and sets no "already chosen" flag.
+    """
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "modes.html",
+        {"user": user, "css_version": CSS_VERSION},
+    )
+
+
+@router.get("/modes/weekly")
+def weekly_prompt_placeholder(
+    request: Request, user: User | None = Depends(get_current_user_optional)
+):
+    """Placeholder for Mode 1, the guided weekly prompt.
+
+    The real flow is built in a later task; this exists so the chooser's Mode 1
+    card links somewhere that returns 200 instead of 404. The path is the one
+    the finished prompt will take over, so the chooser needs no edit then.
+    """
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "weekly_placeholder.html",
+        {"user": user, "css_version": CSS_VERSION},
+    )
 
 
 @router.get("/orders")
