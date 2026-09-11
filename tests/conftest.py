@@ -221,17 +221,14 @@ def admin_client(client, admin_user) -> TestClient:
     return login_as(client, admin_user.username, ADMIN_PASSWORD)
 
 
-@pytest.fixture
-def menu_week(db) -> list[MenuItem]:
-    """Seeds a menu for the current week, matching the shape order_page queries
-    (week_start == week_start(today_local()), English day names as stored by the
-    parser). Monday..Friday with a soup and two mains, so a lettered a/b/c
-    prompt has something to iterate over.
-    """
-    ws = week_start(today_local())
-    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+
+def _week_items(ws: date) -> list[MenuItem]:
+    """One week's worth of menu rows: Mon..Fri, each with a soup and two mains,
+    so a lettered a/b/c prompt has something to iterate over."""
     items: list[MenuItem] = []
-    for offset, day in enumerate(day_names):
+    for day in DAY_NAMES:
         items.append(
             MenuItem(
                 week_start=ws,
@@ -255,10 +252,50 @@ def menu_week(db) -> list[MenuItem]:
                     calories_kcal=600 + index,
                 )
             )
-        del offset
+    return items
+
+
+@pytest.fixture
+def menu_week(db) -> list[MenuItem]:
+    """Seeds a menu for every week the suite can legitimately touch.
+
+    WEEKEND FRAGILITY (fixed here, do not re-narrow to a single week):
+    page routes render `week_start(today_local())` -- the CURRENT week -- while
+    `next_weekday` rolls forward to the coming Monday when the suite runs on a
+    Saturday or Sunday. On a weekend those are two DIFFERENT Mondays (e.g.
+    today 2026-09-12 -> current week 2026-09-07, next_weekday 2026-09-14).
+    Seeding only the current week meant every test submitting a real order line
+    got 400 "not on the menu for <date>" on Sat/Sun, so the suite's greens were
+    silently date-dependent and only observed on a Friday.
+
+    Seeding both weeks keeps BOTH contracts intact at once: the rendering tests
+    still find a full current week, and the order-submitting tests find the
+    day `next_weekday` actually lands on. Item names are identical per weekday
+    in both weeks (`"<Day> soup"` / `"<Day> main <n>"`), which is what
+    `_line()` in the order tests derives from the date, so no assertion has to
+    change. On a weekday the two weeks coincide and only one is seeded, making
+    this a no-op relative to the previous behaviour.
+    """
+    weeks = {week_start(today_local()), week_start(_next_orderable_weekday())}
+    items: list[MenuItem] = []
+    for ws in sorted(weeks):
+        items.extend(_week_items(ws))
     db.add_all(items)
     db.commit()
     return items
+
+
+def _next_orderable_weekday() -> date:
+    """Today if today is a weekday, otherwise the coming Monday.
+
+    Module-level (not just the fixture) so `menu_week` can seed exactly the
+    week this lands in. Both must agree on one definition, or the weekend
+    fragility this file documents comes straight back.
+    """
+    today = today_local()
+    if today.weekday() < 5:
+        return today
+    return today + timedelta(days=7 - today.weekday())
 
 
 @pytest.fixture
@@ -266,8 +303,6 @@ def next_weekday() -> date:
     """An orderable date: today if today is a weekday, otherwise the coming
     Monday. `_check_ordering_allowed` rejects past dates and weekends, so tests
     that submit an order need a date that satisfies both rules whenever the
-    suite happens to run."""
-    today = today_local()
-    if today.weekday() < 5:
-        return today
-    return today + timedelta(days=7 - today.weekday())
+    suite happens to run. `menu_week` seeds this date's week, so a line for it
+    is always on the menu."""
+    return _next_orderable_weekday()
