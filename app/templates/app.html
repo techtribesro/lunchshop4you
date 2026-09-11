@@ -141,6 +141,23 @@
 
   <div class="screen active" id="view-order">
     <div class="order-shell">
+      <!-- Distinct entry point for ordering on someone else's behalf. The
+           #people-row below remains a READ-ONLY viewer; this button is the
+           only way to actually edit + submit for another user. -->
+      <div class="on-behalf-bar">
+        <button type="button" id="on-behalf-start" class="chip-btn">Objednat za někoho jiného</button>
+        <div class="on-behalf-picker" id="on-behalf-picker" hidden>
+          <label for="on-behalf-select">Za koho objednáváte?</label>
+          <select id="on-behalf-select"><!-- options injected by JS --></select>
+          <button type="button" id="on-behalf-cancel" class="chip-btn">Zrušit</button>
+        </div>
+      </div>
+
+      <div class="on-behalf-banner" id="on-behalf-banner" role="status" hidden>
+        <strong>Pozor:</strong> objednáváte za <strong id="on-behalf-banner-name"></strong>, ne za sebe.
+        <button type="button" id="on-behalf-exit" class="chip-btn">Zpět na moji objednávku</button>
+      </div>
+
       <div class="day-row" id="people-row"><!-- person pills injected by JS --></div>
 
       <div class="day-row" id="day-row"><!-- day pills injected by JS --></div>
@@ -391,11 +408,17 @@
     // the server-rendered ORDERS_BY_DAY; anyone else is fetched on demand
     // from /orders/week/{username}.
     let actingAsUser = "";
+    // TRUE only when the user deliberately started an on-behalf ORDER via the
+    // dedicated button. Browsing the read-only "Objednávám za" pill row leaves
+    // this false, so viewing someone's orders can never become an accidental
+    // submit on their behalf.
+    let onBehalfMode = false;
     const cartsByUser = { "": buildCartsFromDayMap(ORDERS_BY_DAY) };
     let carts = cartsByUser[""];
 
     async function setActingAsUser(username) {
       actingAsUser = username || "";
+      if (!actingAsUser) onBehalfMode = false;
       if (!(actingAsUser in cartsByUser)) {
         const resp = await fetch(`/orders/week/${encodeURIComponent(actingAsUser)}`);
         cartsByUser[actingAsUser] = resp.ok ? buildCartsFromOrderList(await resp.json()) : buildCartsFromDayMap({});
@@ -413,7 +436,10 @@
       return carts[iso] || (carts[iso] = {});
     }
     function isEditable(day) {
-      if (actingAsUser && !IS_ADMIN) return false; // viewing someone else, read-only
+      // Acting as someone else is editable only in an explicit on-behalf
+      // order (any logged-in user may do this since 2026-09-11) or for an
+      // admin. Otherwise the pill row stays a read-only viewer.
+      if (actingAsUser && !onBehalfMode && !IS_ADMIN) return false;
       return dateForDay(day) >= TODAY_ISO;
     }
 
@@ -543,7 +569,7 @@
     }
 
     async function submitOrder() {
-      if (actingAsUser && !IS_ADMIN) return; // read-only view of someone else's orders
+      if (actingAsUser && !onBehalfMode && !IS_ADMIN) return; // read-only view
       const cart = currentCart();
       const dateIso = currentDateIso();
       const statusEl = document.getElementById("submit-status-desktop");
@@ -554,10 +580,16 @@
         statusEl.className = "submit-status error";
         return;
       }
-      const url = actingAsUser ? "/admin/orders" : "/orders";
-      const payload = actingAsUser
-        ? { username: actingAsUser, order_date: dateIso, items }
-        : { items, order_date: dateIso };
+      // On-behalf ordering goes through POST /orders with `on_behalf_of`
+      // (open to any logged-in user since 2026-09-11), NOT /admin/orders.
+      // The admin-only /admin/orders path remains for an admin editing via
+      // the pill row without having started an explicit on-behalf order.
+      const useOnBehalf = actingAsUser && (onBehalfMode || !IS_ADMIN);
+      const url = actingAsUser && !useOnBehalf ? "/admin/orders" : "/orders";
+      let payload;
+      if (!actingAsUser) payload = { items, order_date: dateIso };
+      else if (useOnBehalf) payload = { items, order_date: dateIso, on_behalf_of: actingAsUser };
+      else payload = { username: actingAsUser, order_date: dateIso, items };
       const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -678,18 +710,88 @@
         btn.type = "button";
         if (p.username === actingAsUser) btn.setAttribute("aria-current", "true");
         btn.innerHTML = `<div class="n">${p.label}</div>`;
-        btn.addEventListener("click", () => {
-          setActingAsUser(p.username);
+        btn.addEventListener("click", async () => {
+          // The pill row is a viewer: selecting here always leaves on-behalf
+          // ordering mode, so it can never turn into an accidental submit.
+          onBehalfMode = false;
+          await setActingAsUser(p.username);
           renderPeoplePills(usernames);
+          updateOnBehalfUi();
         });
         row.appendChild(btn);
       });
     }
 
+    let knownUsernames = [];
+
     async function loadPeopleList() {
       const resp = await fetch("/users");
       if (!resp.ok) return;
-      renderPeoplePills(await resp.json());
+      knownUsernames = await resp.json();
+      renderPeoplePills(knownUsernames);
+      renderOnBehalfOptions();
+    }
+
+    // ---- Distinct "Objednat za někoho jiného" flow ----
+    const onBehalfStartBtn = document.getElementById("on-behalf-start");
+    const onBehalfPicker = document.getElementById("on-behalf-picker");
+    const onBehalfSelect = document.getElementById("on-behalf-select");
+    const onBehalfCancelBtn = document.getElementById("on-behalf-cancel");
+    const onBehalfBanner = document.getElementById("on-behalf-banner");
+    const onBehalfBannerName = document.getElementById("on-behalf-banner-name");
+    const onBehalfExitBtn = document.getElementById("on-behalf-exit");
+
+    function renderOnBehalfOptions() {
+      if (!onBehalfSelect) return;
+      const others = knownUsernames.filter(u => u !== USERNAME);
+      onBehalfSelect.innerHTML =
+        '<option value="">– vyberte osobu –</option>' +
+        others.map(u => `<option value="${u}">${u}</option>`).join("");
+    }
+
+    function updateOnBehalfUi() {
+      const active = onBehalfMode && actingAsUser;
+      document.body.classList.toggle("is-ordering-on-behalf", !!active);
+      if (onBehalfBanner) onBehalfBanner.hidden = !active;
+      if (active && onBehalfBannerName) onBehalfBannerName.textContent = actingAsUser;
+      if (onBehalfStartBtn) onBehalfStartBtn.hidden = !!active;
+    }
+
+    async function exitOnBehalf() {
+      onBehalfMode = false;
+      if (onBehalfPicker) onBehalfPicker.hidden = true;
+      if (onBehalfSelect) onBehalfSelect.value = "";
+      await setActingAsUser("");
+      renderPeoplePills(knownUsernames);
+      updateOnBehalfUi();
+    }
+
+    if (onBehalfStartBtn) {
+      onBehalfStartBtn.addEventListener("click", () => {
+        onBehalfPicker.hidden = false;
+        onBehalfSelect.focus();
+      });
+      onBehalfCancelBtn.addEventListener("click", () => {
+        onBehalfPicker.hidden = true;
+        onBehalfSelect.value = "";
+      });
+      onBehalfSelect.addEventListener("change", async () => {
+        const target = onBehalfSelect.value;
+        if (!target) return;
+        onBehalfMode = true;
+        await setActingAsUser(target);
+        onBehalfMode = true; // setActingAsUser only clears it when going back to self
+        onBehalfPicker.hidden = true;
+        renderPeoplePills(knownUsernames);
+        updateOnBehalfUi();
+        renderMenu();
+        renderSummary();
+        updateSubmitState();
+      });
+      onBehalfExitBtn.addEventListener("click", exitOnBehalf);
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && onBehalfMode) exitOnBehalf();
+      });
     }
 
     const sendOutBtn = document.getElementById("topbar-send-out");
@@ -739,6 +841,7 @@
     renderMenu();
     renderSummary();
     updateSubmitState();
+    updateOnBehalfUi();
     loadPeopleList();
   </script>
 

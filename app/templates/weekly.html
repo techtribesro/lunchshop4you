@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oběd — týdenní objednávka</title>
+  <link rel="stylesheet" href="/static/css/app.css?v={{ css_version }}" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="wordmark"><span class="glyph">Ob</span>ěd</div>
+    <nav class="view-nav">
+      <a href="/modes">Výběr režimu</a>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="user-chip">
+      <span class="username">{{ user.username }}</span>
+    </div>
+    <button class="link-btn" type="button" id="logout-btn">Odhlásit</button>
+  </div>
+
+  <main class="screen active">
+    <h1>Týdenní objednávka</h1>
+
+    {% if not has_menu %}
+    {# Whole week empty -- the menu for this week hasn't been loaded yet. #}
+    <section id="weekly-empty">
+      <p>Pro tento týden zatím není načtené žádné menu.</p>
+      <p>Zkuste to prosím později, nebo se vraťte na
+         <a href="/modes">výběr režimu</a>.</p>
+    </section>
+    {% else %}
+    <p>Projdeme spolu týden den po dni. U každého dne si vyberete jídlo
+       a můžete přidat poznámku.</p>
+
+    {# The guided one-day-at-a-time step host. Empty on the server and filled by
+       the client script, which also hides the no-JS fallback below. Without JS
+       this stays empty and the full week remains readable in #weekly-prompt. #}
+    <section id="weekly-step" class="weekly-step" hidden aria-live="polite">
+      <p class="weekly-progress" id="weekly-progress"></p>
+      <h2 class="weekly-step-day" id="weekly-step-day"></h2>
+      <p class="weekly-step-status" id="weekly-step-status"></p>
+
+      <form id="weekly-step-form">
+        <fieldset class="weekly-options" id="weekly-options">
+          <legend id="weekly-options-legend">Vyberte jídlo</legend>
+        </fieldset>
+
+        <div class="weekly-note-row">
+          <label class="weekly-note-label" for="weekly-note">Poznámka (nepovinné)</label>
+          {# maxlength mirrors the server's `line.note.strip()[:255]` so the UI
+             cannot accept a note the backend would silently truncate. #}
+          <input type="text" id="weekly-note" class="weekly-note-input"
+                 maxlength="255"
+                 placeholder="např. bez cibule" />
+        </div>
+
+        <div class="weekly-actions">
+          <button type="button" class="weekly-back" id="weekly-back">Zpět</button>
+          <button type="button" class="weekly-skip" id="weekly-skip">Přeskočit den</button>
+          <button type="submit" class="weekly-next" id="weekly-next">Pokračovat</button>
+        </div>
+      </form>
+    </section>
+
+    {# End-of-week summary. t8 appends its "order for someone else?" question
+       inside #weekly-done-extra -- see startPromptFor() in the script below. #}
+    <section id="weekly-done" class="weekly-done" hidden aria-live="polite">
+      <h2>Hotovo</h2>
+      <p class="weekly-done-summary" id="weekly-done-summary"></p>
+      <div id="weekly-done-extra"></div>
+      <p><a href="/modes">Zpět na výběr režimu</a></p>
+    </section>
+
+    {# Server-rendered fallback: the guided step-by-step interaction is layered
+       on top of this markup by the client script. Without JS the whole week is
+       still readable here. #}
+    <div id="weekly-prompt">
+      {% for day in days %}
+      <section class="weekly-day" data-day-date="{{ day.date }}">
+        <h2>{{ day.label }}</h2>
+        {% if not day.items %}
+        <p>Pro tento den není načtené menu.</p>
+        {% elif not day.orderable %}
+        <p>Tento den už nelze objednat.</p>
+        {% endif %}
+        {% if day.items %}
+        <ol class="weekly-choices">
+          {% for item in day["items"] %}
+          <li>
+            <span class="item-name">{{ item.name }}</span>
+            {% if item.desc %}<span class="item-desc">{{ item.desc }}</span>{% endif %}
+            <span class="item-price">{{ item.price }} Kč</span>
+            {% if item.kcal %}<span class="item-kcal">{{ item.kcal }} kcal</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </main>
+
+  <script>
+    // Data contract for the guided prompt. WEEK is ordered Monday..Friday and
+    // every weekday is always present, even with no items, so the client can
+    // iterate without guarding for missing days.
+    //   day.label     -- Czech weekday label (DAY_LABELS_CZ)
+    //   day.date      -- ISO date, post verbatim as POST /orders order_date
+    //   day.orderable -- false for past days; mirrors _check_ordering_allowed
+    //   day.items[]   -- {cat, name, desc, price, kcal}, same shape as app.html's MENU
+    const WEEK = {{ days | tojson }};
+    const HAS_MENU = {{ has_menu | tojson }};
+    const TODAY_ISO = {{ today_iso | tojson }};
+    const WEEK_START_ISO = {{ week_start_iso | tojson }};
+    const USERNAME = {{ user.username | tojson }};
+
+    document.getElementById("logout-btn").addEventListener("click", async () => {
+      await fetch("/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+
+    // ---- Mode 1: the guided one-day-at-a-time prompt ---------------------
+    //
+    // Server-side truncation is `line.note.strip()[:255]` (app/routers/orders.py).
+    // Mirrored here so what the user sees is what gets stored.
+    const NOTE_MAX = 255;
+    const LETTERS = "abcdefghijklmnopqrstuvwxyz";
+
+    function letterFor(index) {
+      // Past 26 items fall back to a number rather than running off the
+      // alphabet; the menu never gets near this, but silence beats "undefined".
+      return index < LETTERS.length ? LETTERS[index] : String(index + 1);
+    }
+
+    function normaliseNote(raw) {
+      return (raw || "").trim().slice(0, NOTE_MAX);
+    }
+
+    // Only days that are BOTH orderable and actually have a menu can be
+    // stepped. `orderable` is false for past days (it mirrors
+    // _check_ordering_allowed), so submitting one would 400.
+    function isSteppable(day) {
+      return day.orderable && day.items.length > 0;
+    }
+
+    const stepEl = document.getElementById("weekly-step");
+    const doneEl = document.getElementById("weekly-done");
+    const fallbackEl = document.getElementById("weekly-prompt");
+
+    if (HAS_MENU && stepEl) {
+      const optionsEl = document.getElementById("weekly-options");
+      const legendEl = document.getElementById("weekly-options-legend");
+      const noteEl = document.getElementById("weekly-note");
+      const dayEl = document.getElementById("weekly-step-day");
+      const statusEl = document.getElementById("weekly-step-status");
+      const progressEl = document.getElementById("weekly-progress");
+      const backBtn = document.getElementById("weekly-back");
+      const skipBtn = document.getElementById("weekly-skip");
+      const nextBtn = document.getElementById("weekly-next");
+      const formEl = document.getElementById("weekly-step-form");
+      const summaryEl = document.getElementById("weekly-done-summary");
+
+      // Per-person state. `picks` is keyed by ISO date -> {item_name, note}.
+      // startPromptFor() resets it so one person's picks never leak into the
+      // next pass -- this is the seam t8 re-enters for "someone else".
+      let targetUser = USERNAME;
+      let picks = {};
+      let cursor = 0;
+
+      function currentDay() {
+        return WEEK[cursor];
+      }
+
+      function render() {
+        const day = currentDay();
+        const steppable = isSteppable(day);
+
+        progressEl.textContent = `Den ${cursor + 1} z ${WEEK.length}`;
+        dayEl.textContent = day.label;
+        legendEl.textContent = `Vyberte jídlo — ${day.label}`;
+        optionsEl.innerHTML = "";
+
+        if (!day.items.length) {
+          statusEl.textContent = "Pro tento den není načtené menu.";
+        } else if (!day.orderable) {
+          statusEl.textContent = "Tento den už nelze objednat.";
+        } else {
+          statusEl.textContent = "";
+        }
+
+        const existing = picks[day.date];
+
+        if (steppable) {
+          day.items.forEach((item, index) => {
+            const letter = letterFor(index);
+            const optionId = `weekly-option-${index}`;
+            const wrap = document.createElement("div");
+            wrap.className = "weekly-option";
+
+            // A real radio + label: focusable, keyboard-operable and exposed
+            // to assistive tech with an accessible name, rather than a
+            // clickable div.
+            const input = document.createElement("input");
+            input.type = "radio";
+            input.name = "weekly-choice";
+            input.id = optionId;
+            input.className = "weekly-option-input";
+            input.value = item.name;
+            input.dataset.letter = letter;
+            if (existing && existing.item_name === item.name) input.checked = true;
+
+            const label = document.createElement("label");
+            label.className = "weekly-option-label";
+            label.htmlFor = optionId;
+            const bits = [`${letter}) ${item.name}`, `${item.price} Kč`];
+            if (item.kcal) bits.push(`${item.kcal} kcal`);
+            label.textContent = bits.join(" — ");
+
+            wrap.appendChild(input);
+            wrap.appendChild(label);
+            optionsEl.appendChild(wrap);
+          });
+        }
+
+        noteEl.value = existing ? existing.note : "";
+        noteEl.disabled = !steppable;
+        // A non-steppable day can only be moved past, never submitted.
+        nextBtn.hidden = !steppable;
+        skipBtn.textContent = steppable ? "Přeskočit den" : "Další den";
+        backBtn.disabled = cursor === 0;
+
+        stepEl.hidden = false;
+        doneEl.hidden = true;
+      }
+
+      async function submitDay(day, pick) {
+        const payload = {
+          // day.date is posted VERBATIM. It is computed server-side precisely
+          // to avoid app.html's documented toISOString() UTC off-by-one bug;
+          // do not re-derive it in JS.
+          order_date: day.date,
+          items: [{ item_name: pick.item_name, quantity: 1, note: pick.note }],
+        };
+        // Seam for t8: an on-behalf pass sets targetUser, and POST /orders
+        // accepts `on_behalf_of` for any logged-in user (operator-approved
+        // 2026-09-11). Omitted entirely when ordering for oneself.
+        if (targetUser !== USERNAME) payload.on_behalf_of = targetUser;
+
+        const resp = await fetch("/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          let detail = "";
+          try { detail = (await resp.json()).detail || ""; } catch (err) { detail = ""; }
+          throw new Error(detail || `Uložení se nezdařilo (${resp.status}).`);
+        }
+      }
+
+      function finish() {
+        const chosen = WEEK.filter(day => picks[day.date]);
+        stepEl.hidden = true;
+        doneEl.hidden = false;
+        if (!chosen.length) {
+          summaryEl.textContent = targetUser === USERNAME
+            ? "Tento týden jste si nic neobjednali."
+            : `Pro uživatele ${targetUser} nebylo nic objednáno.`;
+        } else {
+          const lines = chosen.map(day => `${day.label}: ${picks[day.date].item_name}`);
+          const who = targetUser === USERNAME ? "Objednávka uložena" : `Objednávka uložena pro ${targetUser}`;
+          summaryEl.textContent = `${who} — ${lines.join(", ")}.`;
+        }
+        // t8 hook: the "order for someone else?" question is appended into
+        // #weekly-done-extra and calls startPromptFor(username) to re-run the
+        // same prompt for the next person.
+        document.dispatchEvent(new CustomEvent("weekly:done", {
+          detail: { username: targetUser, picks: Object.assign({}, picks) },
+        }));
+      }
+
+      async function advance() {
+        cursor += 1;
+        while (cursor < WEEK.length && !isSteppable(WEEK[cursor])) {
+          // Nothing to choose here; don't make the user click through it.
+          cursor += 1;
+        }
+        if (cursor >= WEEK.length) finish();
+        else render();
+      }
+
+      formEl.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const day = currentDay();
+        if (!isSteppable(day)) return advance();
+
+        const checked = optionsEl.querySelector("input[name='weekly-choice']:checked");
+        if (!checked) {
+          statusEl.textContent = "Vyberte prosím jídlo, nebo den přeskočte.";
+          return;
+        }
+
+        const pick = { item_name: checked.value, note: normaliseNote(noteEl.value) };
+        nextBtn.disabled = true;
+        try {
+          await submitDay(day, pick);
+          picks[day.date] = pick;
+          statusEl.textContent = "";
+          await advance();
+        } catch (err) {
+          statusEl.textContent = err.message;
+        } finally {
+          nextBtn.disabled = false;
+        }
+      });
+
+      skipBtn.addEventListener("click", () => { advance(); });
+
+      backBtn.addEventListener("click", () => {
+        if (cursor === 0) return;
+        cursor -= 1;
+        while (cursor > 0 && !isSteppable(WEEK[cursor])) cursor -= 1;
+        statusEl.textContent = "";
+        render();
+      });
+
+      // ---- End-of-week: "order for someone else?" -----------------------
+      //
+      // The operator's words: "at the end when you are done with the week,
+      // you get asked if you wanna order for someone else and who it is and
+      // it runs the same prompt". So: a yes/no question, then a picker of
+      // EXISTING REGISTERED USERS ONLY (GET /users -- no free-text names, no
+      // user creation, no schema change), then startPromptFor() re-runs the
+      // very same stepper for that person.
+      //
+      // Isolation of the previous person's orders is structural, not guarded:
+      // startPromptFor() clears `picks`/`cursor`, and submitDay() posts
+      // `on_behalf_of` only when the target isn't the logged-in user, so every
+      // pass writes under its own target's user id. POST /orders' delete-then-
+      // reinsert is scoped to (user_id, order_date), so a second pass cannot
+      // reach the first person's rows.
+      const extraEl = document.getElementById("weekly-done-extra");
+
+      // Deliberately NO overwrite guard / confirmation / audit trail here:
+      // ordering for a colleague who already ordered that day overwrites it.
+      // The operator was shown this and explicitly accepted it (goal.md
+      // ACCEPTED RISK); adding guards is scope that was refused.
+      async function fetchUsernames() {
+        const resp = await fetch("/users", { headers: { Accept: "application/json" } });
+        if (!resp.ok) throw new Error(`Nepodařilo se načíst seznam uživatelů (${resp.status}).`);
+        return await resp.json();
+      }
+
+      function renderAnotherQuestion() {
+        if (!extraEl) return;
+        extraEl.innerHTML = "";
+
+        // Real fieldset + radios: focusable, keyboard-operable, with an
+        // accessible name from the legend -- not clickable divs.
+        const fieldset = document.createElement("fieldset");
+        fieldset.className = "weekly-another";
+        fieldset.id = "weekly-another";
+
+        const legend = document.createElement("legend");
+        legend.textContent = "Chcete objednat pro někoho dalšího?";
+        fieldset.appendChild(legend);
+
+        const choices = [
+          { id: "weekly-another-yes", value: "yes", label: "Ano" },
+          { id: "weekly-another-no", value: "no", label: "Ne" },
+        ];
+        choices.forEach(choice => {
+          const wrap = document.createElement("div");
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = "weekly-another";
+          input.id = choice.id;
+          input.value = choice.value;
+          const label = document.createElement("label");
+          label.htmlFor = choice.id;
+          label.textContent = choice.label;
+          wrap.appendChild(input);
+          wrap.appendChild(label);
+          fieldset.appendChild(wrap);
+        });
+
+        // The "who" picker stays hidden until "Ano" is chosen.
+        const pickRow = document.createElement("div");
+        pickRow.className = "weekly-another-pick";
+        pickRow.id = "weekly-another-pick";
+        pickRow.hidden = true;
+
+        const selectLabel = document.createElement("label");
+        selectLabel.htmlFor = "weekly-another-user";
+        selectLabel.textContent = "Pro koho objednáváme?";
+
+        const select = document.createElement("select");
+        select.id = "weekly-another-user";
+        select.name = "weekly-another-user";
+
+        const startBtn = document.createElement("button");
+        startBtn.type = "button";
+        startBtn.id = "weekly-another-start";
+        startBtn.textContent = "Pokračovat";
+        startBtn.disabled = true;
+
+        pickRow.appendChild(selectLabel);
+        pickRow.appendChild(select);
+        pickRow.appendChild(startBtn);
+        fieldset.appendChild(pickRow);
+
+        const statusRow = document.createElement("p");
+        statusRow.id = "weekly-another-status";
+        statusRow.className = "weekly-another-status";
+        fieldset.appendChild(statusRow);
+
+        extraEl.appendChild(fieldset);
+
+        let loaded = false;
+        async function loadUsers() {
+          if (loaded) return;
+          statusRow.textContent = "Načítám uživatele…";
+          try {
+            const names = await fetchUsernames();
+            select.innerHTML = "";
+            // Everyone except whoever this pass just ordered for; re-running
+            // the same person immediately would only overwrite what we wrote.
+            const offer = names.filter(name => name !== targetUser);
+            if (!offer.length) {
+              statusRow.textContent = "Žádní další uživatelé nejsou k dispozici.";
+              return;
+            }
+            offer.forEach(name => {
+              const option = document.createElement("option");
+              option.value = name;
+              option.textContent = name;
+              select.appendChild(option);
+            });
+            loaded = true;
+            startBtn.disabled = false;
+            statusRow.textContent = "";
+          } catch (err) {
+            statusRow.textContent = err.message;
+          }
+        }
+
+        fieldset.addEventListener("change", event => {
+          if (event.target.name !== "weekly-another") return;
+          if (event.target.value === "yes") {
+            pickRow.hidden = false;
+            loadUsers();
+          } else {
+            // "Ne" ends the flow cleanly: the picker is dismissed and the
+            // flow is closed out with a confirmation. The question itself is
+            // left in place rather than torn out from under the click that
+            // triggered it -- removing the radio mid-click loses the control
+            // the user just operated (and its checked state with it).
+            pickRow.hidden = true;
+            statusRow.textContent = "Hotovo, objednávka je uzavřená.";
+          }
+        });
+
+        startBtn.addEventListener("click", () => {
+          const chosen = select.value;
+          if (!chosen) return;
+          extraEl.innerHTML = "";
+          startPromptFor(chosen);
+        });
+      }
+
+      // finish() announces the end of a pass; that is where the question goes.
+      document.addEventListener("weekly:done", renderAnotherQuestion);
+
+      // Entry point, and the seam t8 re-enters for each additional person.
+      // Resets cursor/picks so a second pass starts clean.
+      function startPromptFor(username) {
+        targetUser = username || USERNAME;
+        picks = {};
+        cursor = 0;
+        while (cursor < WEEK.length && !isSteppable(WEEK[cursor])) cursor += 1;
+        if (cursor >= WEEK.length) finish();
+        else render();
+      }
+      window.startPromptFor = startPromptFor;
+
+      // The guided flow replaces the static week listing once JS is running.
+      if (fallbackEl) fallbackEl.hidden = true;
+      startPromptFor(USERNAME);
+    }
+  </script>
+</body>
+</html>
