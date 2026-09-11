@@ -818,55 +818,163 @@
 
   /* ---------- Mode chooser (/modes) ---------- */
   /* Mirrors the .order-shell container convention rather than inventing a
-     second page-shell system. */
+     second page-shell system. Narrower than .order-shell on purpose: this
+     page holds two choices, not a week of data, so a full 1080px measure
+     left the cards stranded in whitespace (see evidence/t10). */
   .modes-shell {
-    max-width: 1080px;
+    max-width: 900px;
     margin: 0 auto;
-    padding: 32px 28px 80px;
+    padding: 56px 28px 80px;
   }
-  .modes-shell h1 { font-size: 26px; }
-  .modes-shell > p {
+  /* Sense of arrival: an eyebrow + larger title, echoing the .weekly-progress
+     eyebrow on the prompt screen (t11) rather than a second label system. */
+  .modes-eyebrow {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--ink-muted);
-    margin: 8px 0 28px;
+    margin: 0 0 6px;
+  }
+  .modes-shell h1 {
+    font-size: 32px;
+    margin: 0 0 6px;
+  }
+  .modes-lede {
+    color: var(--ink-muted);
+    margin: 0 0 32px;
+    font-size: 15.5px;
+    max-width: 54ch;
   }
   .modes-list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 18px;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    /* Single column by default: the two modes are a ranked choice, read top
+       to bottom, not a pair of equivalent tiles side by side. */
+    grid-template-columns: 1fr;
   }
   .mode-card {
     position: relative;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 24px 24px 26px;
+    border-radius: 16px;
+    padding: 22px 24px;
     box-shadow: var(--shadow);
-    transition: border-color 0.15s ease, transform 0.1s ease;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "icon head  chev"
+      "icon body  chev"
+      "icon meta  chev";
+    column-gap: 18px;
+    align-items: start;
+    transition: border-color 0.15s ease, transform 0.1s ease,
+                box-shadow 0.15s ease;
   }
-  .mode-card h2 {
+
+  /* The recommended path carries primary weight: accent border, tinted
+     ground and a filled mark. The fallback stays quiet and secondary, so the
+     two cards no longer read as one repeated box. */
+  .mode-card--primary {
+    border-color: var(--accent-strong);
+    background: var(--surface);
+    box-shadow: var(--shadow), inset 0 0 0 1px var(--accent-strong);
+  }
+  .mode-card--secondary .mode-mark {
+    background: var(--surface-raised);
+    color: var(--ink-muted);
+    border: 1px solid var(--line);
+  }
+
+  .mode-mark {
+    grid-area: icon;
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: "Fraunces", ui-serif, Georgia, serif;
     font-size: 19px;
-    margin: 0 0 8px;
+    font-weight: 600;
+    flex: none;
+  }
+
+  .mode-card h2 {
+    grid-area: head;
+    font-size: 20px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
   }
   /* The <a> stays the real focusable, named control; the pseudo-element just
-     extends its hit area over the whole card. */
+     extends its hit area over the whole card, so the card is tappable without
+     turning a div into a fake button. */
   .mode-card h2 a {
     text-decoration: none;
-    color: var(--accent);
+    color: var(--ink);
   }
   .mode-card h2 a::after {
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: 14px;
+    border-radius: 16px;
   }
-  .mode-card p {
-    margin: 0;
+  /* :not(.mode-meta) matters -- .mode-meta is also a <p> inside .mode-card,
+     and a bare `.mode-card p { grid-area: body }` outranks `.mode-meta`
+     (0,0,1,1 vs 0,0,1,0), dropping BOTH paragraphs into the same grid cell
+     so they render stacked on top of each other. */
+  .mode-card p:not(.mode-meta) {
+    grid-area: body;
+    margin: 4px 0 0;
     color: var(--ink-muted);
     font-size: 14.5px;
   }
+
+  /* Small supporting fact per mode, so each card says something the other
+     does not. */
+  .mode-card p.mode-meta {
+    grid-area: meta;
+    margin: 10px 0 0;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mode-badge {
+    font-family: ui-sans-serif, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    border-radius: 999px;
+    padding: 3px 9px;
+  }
+
+  /* Affordance that the card leads somewhere. Decorative only -- the
+     accessible name lives in the link text. */
+  .mode-chev {
+    grid-area: chev;
+    color: var(--ink-faint);
+    font-size: 20px;
+    line-height: 1;
+    transition: transform 0.15s ease, color 0.15s ease;
+  }
+  .mode-card:hover .mode-chev,
+  .mode-card:has(a:focus-visible) .mode-chev {
+    color: var(--accent-strong);
+    transform: translateX(3px);
+  }
+
   .mode-card:hover {
     border-color: var(--accent-strong);
     transform: translateY(-1px);
@@ -878,9 +986,20 @@
   .mode-card h2 a:focus-visible { outline: none; }
 
   @media (max-width: 760px) {
-    .modes-shell { padding: 24px 16px 64px; }
-    .modes-shell h1 { font-size: 22px; }
-    .modes-list { grid-template-columns: 1fr; }
+    .modes-shell { padding: 28px 16px 64px; }
+    .modes-shell h1 { font-size: 25px; }
+    .modes-lede { margin-bottom: 22px; font-size: 15px; }
+    .modes-list { grid-template-columns: 1fr; gap: 14px; }
+    /* Comfortable thumb target at 390px: the whole card is the hit area and
+       stays well above the 44px minimum. */
+    .mode-card {
+      padding: 18px 16px;
+      column-gap: 14px;
+      min-height: 96px;
+    }
+    .mode-mark { width: 40px; height: 40px; font-size: 17px; }
+    .mode-card h2 { font-size: 18px; }
+    .mode-chev { display: none; }
   }
 
   /* ---------- Mobile bottom action bar (order screen only) ---------- */
