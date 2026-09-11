@@ -14,65 +14,79 @@
 }
 
     
+  /* --------------------------------------------------------------------
+     golfshop4you brand palette.
+     VERIFIED values from the live site's inline custom properties:
+       navy #0B1F3A, turquoise #0FA9B8 (hover #0C95A2), light #f5f9fa,
+       muted #647078, border #dce6e9.
+     The identity is NAVY + TURQUOISE -- deliberately NOT green.
+     Token NAMES are unchanged: templates reference them directly
+     (--accent alone 24x), so only the VALUES are re-pointed.
+     NOTE: --on-accent flips to white here. It was #232528 (near-black),
+     which was legible on the old sky-blue accent but would be unreadable
+     dark-on-navy once --accent becomes #0b1f3a.
+     -------------------------------------------------------------------- */
   :root {
-    --paper: #f5f9fc;
+    --paper: #f5f9fa;
     --surface: #ffffff;
     --surface-raised: #ffffff;
-    --ink: #232528;
-    --ink-muted: #5a5f66;
-    --ink-faint: #8b9198;
-    --accent: #009ffd;
-    --accent-strong: #2a2a72;
-    --accent-tint: #eaf6ff;
-    --on-accent: #232528;
-    --line: #d7e6f0;
-    --line-soft: #e5eef5;
+    --ink: #0b1f3a;
+    --ink-muted: #56636b;
+    --ink-faint: #7d8890;
+    --accent: #0b1f3a;
+    --accent-strong: #0c95a2;
+    --accent-tint: #e3f4f6;
+    --on-accent: #ffffff;
+    --line: #dce6e9;
+    --line-soft: #eaf1f3;
     --warn: #ffa400;
     --warn-tint: #ffedcc;
-    --critical: #ffa400;
-    --critical-tint: #ffe3b3;
-    --shadow: 0 1px 2px rgba(35, 37, 40, 0.08), 0 8px 24px -12px rgba(35, 37, 40, 0.2);
+    --critical: #c62828;
+    --critical-tint: #fbe2e2;
+    --shadow: 0 1px 2px rgba(11, 31, 58, 0.08), 0 8px 24px -12px rgba(11, 31, 58, 0.25);
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --paper: #232528;
-      --surface: #2c2f33;
-      --surface-raised: #34383d;
-      --ink: #eaf6ff;
-      --ink-muted: #a9b8c2;
-      --ink-faint: #74838d;
-      --accent: #009ffd;
-      --accent-strong: #4dbcff;
-      --accent-tint: #16324a;
-      --on-accent: #232528;
-      --line: #3a3e44;
-      --line-soft: #2e3237;
+      --paper: #071528;
+      --surface: #0b1f3a;
+      --surface-raised: #102a49;
+      --ink: #eaf4f6;
+      --ink-muted: #a3b4bd;
+      --ink-faint: #7b8c96;
+      --accent: #0fa9b8;
+      --accent-strong: #3fc6d2;
+      --accent-tint: #0e3a4a;
+      --on-accent: #04121f;
+      --line: #1d3b5c;
+      --line-soft: #16304f;
       --warn: #ffa400;
       --warn-tint: #4a3418;
-      --critical: #ffa400;
-      --critical-tint: #4a3418;
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+      --critical: #ef5350;
+      --critical-tint: #4a1c1c;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
     }
   }
+  /* Explicit dark opt-in. MUST stay byte-identical in value to the
+     prefers-color-scheme block above, or the two dark paths drift. */
   :root[data-theme="dark"] {
-    --paper: #232528;
-    --surface: #2c2f33;
-    --surface-raised: #34383d;
-    --ink: #eaf6ff;
-    --ink-muted: #a9b8c2;
-    --ink-faint: #74838d;
-    --accent: #009ffd;
-    --accent-strong: #4dbcff;
-    --accent-tint: #16324a;
-    --on-accent: #232528;
-    --line: #3a3e44;
-    --line-soft: #2e3237;
+    --paper: #071528;
+    --surface: #0b1f3a;
+    --surface-raised: #102a49;
+    --ink: #eaf4f6;
+    --ink-muted: #a3b4bd;
+    --ink-faint: #7b8c96;
+    --accent: #0fa9b8;
+    --accent-strong: #3fc6d2;
+    --accent-tint: #0e3a4a;
+    --on-accent: #04121f;
+    --line: #1d3b5c;
+    --line-soft: #16304f;
     --warn: #ffa400;
     --warn-tint: #4a3418;
-    --critical: #ffa400;
-    --critical-tint: #4a3418;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+    --critical: #ef5350;
+    --critical-tint: #4a1c1c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
   }
 
   * { box-sizing: border-box; }
@@ -129,20 +143,27 @@
     padding: 36px 32px;
     box-shadow: var(--shadow);
   }
+  /* The brand mark is a raster PNG whose ink is ~67% near-black (#1a171b)
+     and ~20% turquoise (#00a4bc). On the dark ground (--paper #071528) the
+     near-black two thirds would disappear, so dark theme gets a light
+     backing chip rather than a filter -- inverting would preserve the
+     near-black but destroy the turquoise that carries the identity. */
+  .brand-logo {
+    display: block;
+    height: auto;
+    width: auto;
+    /* Rendered from a 600x156 source, so it stays crisp when downscaled. */
+    image-rendering: auto;
+  }
+
   .login-mark {
     display: flex;
-    align-items: baseline;
-    gap: 0;
-    margin-bottom: 4px;
+    align-items: center;
+    margin-bottom: 10px;
   }
-  .login-mark .glyph {
-    font-family: "Fraunces", serif;
-    font-weight: 600;
-    font-size: 28px;
-    color: var(--accent);
-  }
-  .login-mark .word {
-    font-size: 22px;
+  .login-mark .brand-logo {
+    height: 40px;
+    max-width: 100%;
   }
   .login-sub {
     font-style: italic;
@@ -213,14 +234,37 @@
     background: var(--paper);
     border-bottom: 1px solid var(--line);
   }
+  /* Was a text wordmark ("Ob"+"ěd" in a flex row, which is what produced the
+     "Ob ěd" gap bug recorded in REQUIREMENTS.md section 9). It is now a
+     single <img>, so there are no inline children left to gap apart. */
   .wordmark {
-    display: flex;
-    align-items: baseline;
-    gap: 0;
-    font-size: 19px;
-    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    border-radius: 8px;
+    flex: none;
   }
-  .wordmark .glyph { color: var(--accent); font-size: 22px; }
+  .wordmark .brand-logo { height: 28px; }
+  .wordmark:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* Dark theme: give the mark a light chip so its near-black two thirds stay
+     legible against --paper/--surface. Both dark selectors are listed so the
+     prefers-color-scheme path and the explicit opt-in cannot drift. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .brand-logo {
+      background: #ffffff;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+  }
+  :root[data-theme="dark"] .brand-logo {
+    background: #ffffff;
+    padding: 6px 10px;
+    border-radius: 8px;
+  }
 
   .view-nav {
     display: flex;
@@ -302,6 +346,140 @@
     transition: color 0.15s ease;
   }
   .link-btn:hover { color: var(--ink); }
+
+  /* ---------- Chip button ----------
+     NOTE: .chip-btn is used by app.html (on-behalf controls, modal
+     actions) but had NO rule anywhere in this stylesheet -- those buttons
+     were rendering as raw browser default buttons. Defining it here. */
+  .chip-btn {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .chip-btn:hover {
+    border-color: var(--accent-strong);
+    color: var(--accent-strong);
+  }
+  .chip-btn:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+
+  /* ---------- Ordering on someone else's behalf ----------
+     This state MUST be unmistakable: a user must never submit an order for
+     a colleague believing it is their own. Before this, the state was
+     conveyed only by Czech copy + role="status" + a body class, with no
+     visual signal at all. The signals are deliberately redundant so the
+     cue does not depend on colour perception alone:
+       1. a thick turquoise page-edge frame (body.is-ordering-on-behalf)
+       2. a high-contrast turquoise banner naming the colleague
+       3. a persistent "⇄" glyph in the banner
+       4. a turquoise-tinted order shell background
+     ------------------------------------------------------------------- */
+  .on-behalf-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .on-behalf-picker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+  .on-behalf-picker[hidden] { display: none; }
+  .on-behalf-picker label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .on-behalf-picker select {
+    font: inherit;
+    font-size: 13.5px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface-raised);
+    color: var(--ink);
+    min-width: 180px;
+  }
+  .on-behalf-picker select:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 1px;
+  }
+
+  .on-behalf-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    background: var(--accent-strong);
+    color: #ffffff;
+    border: 2px solid var(--accent-strong);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-size: 14.5px;
+    line-height: 1.45;
+    box-shadow: 0 4px 16px -8px rgba(12, 149, 162, 0.8);
+  }
+  .on-behalf-banner[hidden] { display: none; }
+  .on-behalf-banner::before {
+    content: "⇄";
+    flex: 0 0 auto;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .on-behalf-banner strong { font-weight: 700; }
+  /* The exit button sits on the turquoise banner, so it needs its own
+     inverted treatment rather than the default chip colours. */
+  .on-behalf-banner .chip-btn {
+    margin-left: auto;
+    background: #ffffff;
+    color: #0b1f3a;
+    border-color: #ffffff;
+  }
+  .on-behalf-banner .chip-btn:hover {
+    background: #eaf4f6;
+    color: #0b1f3a;
+    border-color: #eaf4f6;
+  }
+  .on-behalf-banner .chip-btn:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 3px;
+  }
+
+  /* Whole-page framing so the state is obvious even when the banner has
+     been scrolled past. */
+  body.is-ordering-on-behalf {
+    box-shadow: inset 0 0 0 4px var(--accent-strong);
+  }
+  body.is-ordering-on-behalf .order-shell {
+    background: var(--accent-tint);
+    border-radius: 14px;
+  }
+  body.is-ordering-on-behalf .summary-rail {
+    border-color: var(--accent-strong);
+  }
+  /* Submitting is the irreversible act -- mark that control too. */
+  body.is-ordering-on-behalf .btn-primary {
+    background: var(--accent-strong);
+    color: #ffffff;
+  }
 
   /* ---------- Order screen ---------- */
   .order-shell {
@@ -638,14 +816,80 @@
   }
   .dash-table tfoot td:first-child { color: var(--accent-strong); }
 
+  /* ---------- Mode chooser (/modes) ---------- */
+  /* Mirrors the .order-shell container convention rather than inventing a
+     second page-shell system. */
+  .modes-shell {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 32px 28px 80px;
+  }
+  .modes-shell h1 { font-size: 26px; }
+  .modes-shell > p {
+    color: var(--ink-muted);
+    margin: 8px 0 28px;
+  }
+  .modes-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .mode-card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px 24px 26px;
+    box-shadow: var(--shadow);
+    transition: border-color 0.15s ease, transform 0.1s ease;
+  }
+  .mode-card h2 {
+    font-size: 19px;
+    margin: 0 0 8px;
+  }
+  /* The <a> stays the real focusable, named control; the pseudo-element just
+     extends its hit area over the whole card. */
+  .mode-card h2 a {
+    text-decoration: none;
+    color: var(--accent);
+  }
+  .mode-card h2 a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+  }
+  .mode-card p {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 14.5px;
+  }
+  .mode-card:hover {
+    border-color: var(--accent-strong);
+    transform: translateY(-1px);
+  }
+  .mode-card:has(a:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .mode-card h2 a:focus-visible { outline: none; }
+
+  @media (max-width: 760px) {
+    .modes-shell { padding: 24px 16px 64px; }
+    .modes-shell h1 { font-size: 22px; }
+    .modes-list { grid-template-columns: 1fr; }
+  }
+
   /* ---------- Mobile bottom action bar (order screen only) ---------- */
   .mobile-actionbar { display: none; }
 
   /* ---------- Small screens ---------- */
   @media (max-width: 760px) {
     .topbar { padding: 12px 16px; gap: 10px 14px; flex-wrap: wrap; }
-    .wordmark { font-size: 17px; }
-    .wordmark .glyph { font-size: 19px; }
+    .wordmark .brand-logo { height: 24px; }
     .view-nav button { padding: 8px 13px; font-size: 13px; }
     .user-chip span.username { display: none; }
     .send-out-btn {
@@ -710,4 +954,351 @@
     .login-card { padding: 28px 20px; }
     .stat-row { grid-template-columns: 1fr 1fr; gap: 8px; }
     .stat-tile { padding: 12px 14px; }
+  }
+
+  /* ---------- Mode 1: guided weekly prompt (t11) ----------
+     Presentational only. The flow's stepping logic, the startPromptFor()
+     seam and the weekly:done event are untouched.
+
+     Built from the classes already in this sheet rather than a parallel
+     set: the option rows reuse .item-card's bordered-card language
+     (--surface / --line / 12px radius) and its .is-selected treatment
+     (--accent border + --accent-tint fill), the navigation reuses
+     .btn-primary and .chip-btn, and focus rings follow the established
+     `2px solid var(--accent)` convention.
+
+     The a/b/c choices stay REAL radios with real labels and are NOT
+     visually hidden -- the native control keeps focus order, keyboard
+     operation and the checked state intact. The whole row is the label,
+     so the click target is large without inventing a clickable div.
+     -------------------------------------------------------------------- */
+  .weekly-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 28px 80px;
+  }
+  .weekly-shell > h1 { margin-bottom: 6px; }
+  .weekly-intro {
+    color: var(--ink-muted);
+    font-size: 14.5px;
+    margin: 0 0 22px;
+  }
+
+  /* ---- the step card ---- */
+  .weekly-step,
+  .weekly-done,
+  .weekly-empty {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  .weekly-step[hidden],
+  .weekly-done[hidden] { display: none; }
+
+  .weekly-progress {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-muted);
+    margin: 0 0 6px;
+  }
+  .weekly-step-day {
+    font-size: 23px;
+    margin: 0 0 4px;
+  }
+  /* Empty unless the flow has something to say; collapse it so it never
+     leaves a mystery gap above the options. */
+  .weekly-step-status {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--critical);
+  }
+  .weekly-step-status:empty { display: none; }
+  .weekly-step-status:not(:empty) {
+    background: var(--critical-tint);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 10px 0 0;
+  }
+
+  /* ---- lettered a/b/c options ---- */
+  .weekly-options {
+    border: none;
+    margin: 18px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .weekly-options legend {
+    padding: 0;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-muted);
+    margin-bottom: 10px;
+  }
+  .weekly-option { display: flex; }
+  .weekly-option-input {
+    /* Kept in normal flow and visible: focusable, keyboard-operable and
+       exposed to assistive tech exactly as before. */
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    margin: 16px 0 0 16px;
+    accent-color: var(--accent);
+  }
+  .weekly-option-label {
+    flex: 1;
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px 14px 46px;
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .weekly-option-label:hover {
+    border-color: var(--ink-faint);
+    box-shadow: 0 2px 10px -6px rgba(11, 31, 58, 0.25);
+  }
+  /* Selected row mirrors .item-card.is-selected so the two screens match. */
+  .weekly-option-input:checked + .weekly-option-label {
+    border-color: var(--accent);
+    background: var(--accent-tint);
+    font-weight: 600;
+  }
+  /* Focus ring is driven by the real radio, so keyboard focus is always
+     visible even though the label is what's painted. */
+  .weekly-option-input:focus-visible + .weekly-option-label {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---- note field ---- */
+  .weekly-note-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 18px;
+  }
+  .weekly-note-label {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+  }
+  .weekly-note-input {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-raised);
+    color: var(--ink);
+  }
+  .weekly-note-input::placeholder { color: var(--ink-faint); }
+  .weekly-note-input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .weekly-note-input:disabled {
+    background: var(--line-soft);
+    color: var(--ink-faint);
+    cursor: not-allowed;
+  }
+
+  /* ---- navigation ---- */
+  .weekly-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 22px;
+  }
+  .weekly-back,
+  .weekly-skip {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .weekly-back:hover:not(:disabled),
+  .weekly-skip:hover {
+    border-color: var(--accent-strong);
+    color: var(--accent-strong);
+  }
+  .weekly-back:focus-visible,
+  .weekly-skip:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+  .weekly-back:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  /* "Pokračovat" is the primary act; it sits at the end of the row. */
+  .weekly-next {
+    margin-left: auto;
+    width: auto;
+    background: var(--accent);
+    color: var(--on-accent);
+    border: none;
+    border-radius: 999px;
+    padding: 11px 26px;
+    font-weight: 600;
+    font-size: 14.5px;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+  .weekly-next:hover:not(:disabled) { background: var(--accent-strong); }
+  .weekly-next:active { transform: translateY(1px); }
+  .weekly-next:disabled { opacity: 0.6; cursor: progress; }
+  .weekly-next:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .weekly-next[hidden] { display: none; }
+
+  /* ---- end-of-week + empty states ---- */
+  .weekly-done-summary {
+    margin: 6px 0 0;
+    font-size: 14.5px;
+    color: var(--ink-muted);
+  }
+  .weekly-done-back {
+    margin: 18px 0 0;
+    font-size: 13.5px;
+  }
+
+  /* The "someone else?" question. A real fieldset/legend with real radios;
+     boxed off so it reads as a new question, not a footnote. */
+  .weekly-another {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-raised);
+    padding: 18px 20px;
+    margin: 20px 0 0;
+  }
+  .weekly-another legend {
+    padding: 0 8px;
+    margin-left: -8px;
+    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--ink);
+  }
+  .weekly-another-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 14.5px;
+  }
+  .weekly-another-option input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--accent);
+    flex: 0 0 auto;
+  }
+  .weekly-another-option label { cursor: pointer; }
+  .weekly-another-option input[type="radio"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .weekly-another-pick {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .weekly-another-pick[hidden] { display: none; }
+  .weekly-another-pick label {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-muted);
+  }
+  .weekly-another-pick select {
+    font: inherit;
+    font-size: 13.5px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    min-width: 180px;
+  }
+  .weekly-another-pick select:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 1px;
+  }
+  .weekly-another-pick button {
+    background: var(--accent);
+    color: var(--on-accent);
+    border: none;
+    border-radius: 999px;
+    padding: 10px 22px;
+    font-weight: 600;
+    font-size: 13.5px;
+    transition: background-color 0.15s ease;
+  }
+  .weekly-another-pick button:hover:not(:disabled) { background: var(--accent-strong); }
+  .weekly-another-pick button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .weekly-another-pick button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Doubles as the "Hotovo, objednávka je uzavřená." closing line, so it
+     must not read as an error. */
+  .weekly-another-status {
+    margin: 12px 0 0;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+  }
+  .weekly-another-status:empty { display: none; }
+
+  .weekly-empty p { margin: 0 0 10px; }
+  .weekly-empty p:last-child { margin-bottom: 0; color: var(--ink-muted); font-size: 14px; }
+
+  /* No-JS fallback: the script hides this, but it must still be legible. */
+  .weekly-day {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .weekly-choices { margin: 10px 0 0; padding-left: 22px; }
+  .weekly-choices li { margin-bottom: 6px; }
+
+  @media (max-width: 760px) {
+    .weekly-shell { padding: 18px 16px 40px; }
+    .weekly-step,
+    .weekly-done,
+    .weekly-empty { padding: 18px 16px; border-radius: 12px; }
+    .weekly-step-day { font-size: 20px; }
+    .weekly-option-label { padding: 13px 14px 13px 44px; font-size: 14px; }
+    /* Full-width stacked controls, matching the order screen's mobile
+       treatment: primary action first and always reachable by thumb. */
+    .weekly-actions { gap: 8px; }
+    .weekly-next {
+      order: -1;
+      margin-left: 0;
+      flex: 1 1 100%;
+      padding: 13px 22px;
+    }
+    .weekly-back,
+    .weekly-skip { flex: 1 1 0; padding: 11px 14px; }
+    .weekly-another { padding: 16px 14px; }
+    .weekly-another-pick select,
+    .weekly-another-pick button { flex: 1 1 100%; min-width: 0; }
   }

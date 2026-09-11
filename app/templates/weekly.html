@@ -19,18 +19,18 @@
     <button class="link-btn" type="button" id="logout-btn">Odhlásit</button>
   </div>
 
-  <main class="screen active">
+  <main class="screen active weekly-shell">
     <h1>Týdenní objednávka</h1>
 
     {% if not has_menu %}
     {# Whole week empty -- the menu for this week hasn't been loaded yet. #}
-    <section id="weekly-empty">
+    <section id="weekly-empty" class="weekly-empty">
       <p>Pro tento týden zatím není načtené žádné menu.</p>
       <p>Zkuste to prosím později, nebo se vraťte na
          <a href="/modes">výběr režimu</a>.</p>
     </section>
     {% else %}
-    <p>Projdeme spolu týden den po dni. U každého dne si vyberete jídlo
+    <p class="weekly-intro">Projdeme spolu týden den po dni. U každého dne si vyberete jídlo
        a můžete přidat poznámku.</p>
 
     {# The guided one-day-at-a-time step host. Empty on the server and filled by
@@ -69,7 +69,7 @@
       <h2>Hotovo</h2>
       <p class="weekly-done-summary" id="weekly-done-summary"></p>
       <div id="weekly-done-extra"></div>
-      <p><a href="/modes">Zpět na výběr režimu</a></p>
+      <p class="weekly-done-back"><a href="/modes">Zpět na výběr režimu</a></p>
     </section>
 
     {# Server-rendered fallback: the guided step-by-step interaction is layered
@@ -373,6 +373,7 @@
         ];
         choices.forEach(choice => {
           const wrap = document.createElement("div");
+          wrap.className = "weekly-another-option";
           const input = document.createElement("input");
           input.type = "radio";
           input.name = "weekly-another";
