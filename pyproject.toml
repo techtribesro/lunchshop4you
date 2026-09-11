@@ -26,6 +26,11 @@ dependencies = [
 dev = [
     "pytest>=8.2",
     "httpx>=0.27",
+    # Browser automation for screenshot / accessibility evidence
+    # (scripts/shots.py). DEV ONLY -- must never move into the runtime
+    # `dependencies` list above: this app deploys to Fly.io and must not
+    # grow a browser dependency in production. No app module imports it.
+    "playwright>=1.44",
 ]
 
 [build-system]
