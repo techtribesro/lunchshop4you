@@ -28,6 +28,10 @@ class OrderLineIn(BaseModel):
 class OrderSubmitRequest(BaseModel):
     items: list[OrderLineIn]
     order_date: date | None = None
+    # Username of an EXISTING registered user to submit on behalf of. Any
+    # logged-in user may set this (operator-approved privilege change,
+    # 2026-09-11) -- it is not admin-only. None means "order for myself".
+    on_behalf_of: str | None = None
 
 
 class OrderLineOut(BaseModel):
