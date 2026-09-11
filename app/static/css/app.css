@@ -859,3 +859,350 @@
     .stat-row { grid-template-columns: 1fr 1fr; gap: 8px; }
     .stat-tile { padding: 12px 14px; }
   }
+
+  /* ---------- Mode 1: guided weekly prompt (t11) ----------
+     Presentational only. The flow's stepping logic, the startPromptFor()
+     seam and the weekly:done event are untouched.
+
+     Built from the classes already in this sheet rather than a parallel
+     set: the option rows reuse .item-card's bordered-card language
+     (--surface / --line / 12px radius) and its .is-selected treatment
+     (--accent border + --accent-tint fill), the navigation reuses
+     .btn-primary and .chip-btn, and focus rings follow the established
+     `2px solid var(--accent)` convention.
+
+     The a/b/c choices stay REAL radios with real labels and are NOT
+     visually hidden -- the native control keeps focus order, keyboard
+     operation and the checked state intact. The whole row is the label,
+     so the click target is large without inventing a clickable div.
+     -------------------------------------------------------------------- */
+  .weekly-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 28px 80px;
+  }
+  .weekly-shell > h1 { margin-bottom: 6px; }
+  .weekly-intro {
+    color: var(--ink-muted);
+    font-size: 14.5px;
+    margin: 0 0 22px;
+  }
+
+  /* ---- the step card ---- */
+  .weekly-step,
+  .weekly-done,
+  .weekly-empty {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  .weekly-step[hidden],
+  .weekly-done[hidden] { display: none; }
+
+  .weekly-progress {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-muted);
+    margin: 0 0 6px;
+  }
+  .weekly-step-day {
+    font-size: 23px;
+    margin: 0 0 4px;
+  }
+  /* Empty unless the flow has something to say; collapse it so it never
+     leaves a mystery gap above the options. */
+  .weekly-step-status {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--critical);
+  }
+  .weekly-step-status:empty { display: none; }
+  .weekly-step-status:not(:empty) {
+    background: var(--critical-tint);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 10px 0 0;
+  }
+
+  /* ---- lettered a/b/c options ---- */
+  .weekly-options {
+    border: none;
+    margin: 18px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .weekly-options legend {
+    padding: 0;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-muted);
+    margin-bottom: 10px;
+  }
+  .weekly-option { display: flex; }
+  .weekly-option-input {
+    /* Kept in normal flow and visible: focusable, keyboard-operable and
+       exposed to assistive tech exactly as before. */
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    margin: 16px 0 0 16px;
+    accent-color: var(--accent);
+  }
+  .weekly-option-label {
+    flex: 1;
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px 14px 46px;
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .weekly-option-label:hover {
+    border-color: var(--ink-faint);
+    box-shadow: 0 2px 10px -6px rgba(11, 31, 58, 0.25);
+  }
+  /* Selected row mirrors .item-card.is-selected so the two screens match. */
+  .weekly-option-input:checked + .weekly-option-label {
+    border-color: var(--accent);
+    background: var(--accent-tint);
+    font-weight: 600;
+  }
+  /* Focus ring is driven by the real radio, so keyboard focus is always
+     visible even though the label is what's painted. */
+  .weekly-option-input:focus-visible + .weekly-option-label {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---- note field ---- */
+  .weekly-note-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 18px;
+  }
+  .weekly-note-label {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+  }
+  .weekly-note-input {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-raised);
+    color: var(--ink);
+  }
+  .weekly-note-input::placeholder { color: var(--ink-faint); }
+  .weekly-note-input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .weekly-note-input:disabled {
+    background: var(--line-soft);
+    color: var(--ink-faint);
+    cursor: not-allowed;
+  }
+
+  /* ---- navigation ---- */
+  .weekly-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 22px;
+  }
+  .weekly-back,
+  .weekly-skip {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .weekly-back:hover:not(:disabled),
+  .weekly-skip:hover {
+    border-color: var(--accent-strong);
+    color: var(--accent-strong);
+  }
+  .weekly-back:focus-visible,
+  .weekly-skip:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+  .weekly-back:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  /* "Pokračovat" is the primary act; it sits at the end of the row. */
+  .weekly-next {
+    margin-left: auto;
+    width: auto;
+    background: var(--accent);
+    color: var(--on-accent);
+    border: none;
+    border-radius: 999px;
+    padding: 11px 26px;
+    font-weight: 600;
+    font-size: 14.5px;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+  .weekly-next:hover:not(:disabled) { background: var(--accent-strong); }
+  .weekly-next:active { transform: translateY(1px); }
+  .weekly-next:disabled { opacity: 0.6; cursor: progress; }
+  .weekly-next:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .weekly-next[hidden] { display: none; }
+
+  /* ---- end-of-week + empty states ---- */
+  .weekly-done-summary {
+    margin: 6px 0 0;
+    font-size: 14.5px;
+    color: var(--ink-muted);
+  }
+  .weekly-done-back {
+    margin: 18px 0 0;
+    font-size: 13.5px;
+  }
+
+  /* The "someone else?" question. A real fieldset/legend with real radios;
+     boxed off so it reads as a new question, not a footnote. */
+  .weekly-another {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-raised);
+    padding: 18px 20px;
+    margin: 20px 0 0;
+  }
+  .weekly-another legend {
+    padding: 0 8px;
+    margin-left: -8px;
+    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--ink);
+  }
+  .weekly-another-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 14.5px;
+  }
+  .weekly-another-option input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--accent);
+    flex: 0 0 auto;
+  }
+  .weekly-another-option label { cursor: pointer; }
+  .weekly-another-option input[type="radio"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .weekly-another-pick {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .weekly-another-pick[hidden] { display: none; }
+  .weekly-another-pick label {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-muted);
+  }
+  .weekly-another-pick select {
+    font: inherit;
+    font-size: 13.5px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    min-width: 180px;
+  }
+  .weekly-another-pick select:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 1px;
+  }
+  .weekly-another-pick button {
+    background: var(--accent);
+    color: var(--on-accent);
+    border: none;
+    border-radius: 999px;
+    padding: 10px 22px;
+    font-weight: 600;
+    font-size: 13.5px;
+    transition: background-color 0.15s ease;
+  }
+  .weekly-another-pick button:hover:not(:disabled) { background: var(--accent-strong); }
+  .weekly-another-pick button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .weekly-another-pick button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Doubles as the "Hotovo, objednávka je uzavřená." closing line, so it
+     must not read as an error. */
+  .weekly-another-status {
+    margin: 12px 0 0;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+  }
+  .weekly-another-status:empty { display: none; }
+
+  .weekly-empty p { margin: 0 0 10px; }
+  .weekly-empty p:last-child { margin-bottom: 0; color: var(--ink-muted); font-size: 14px; }
+
+  /* No-JS fallback: the script hides this, but it must still be legible. */
+  .weekly-day {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .weekly-choices { margin: 10px 0 0; padding-left: 22px; }
+  .weekly-choices li { margin-bottom: 6px; }
+
+  @media (max-width: 760px) {
+    .weekly-shell { padding: 18px 16px 40px; }
+    .weekly-step,
+    .weekly-done,
+    .weekly-empty { padding: 18px 16px; border-radius: 12px; }
+    .weekly-step-day { font-size: 20px; }
+    .weekly-option-label { padding: 13px 14px 13px 44px; font-size: 14px; }
+    /* Full-width stacked controls, matching the order screen's mobile
+       treatment: primary action first and always reachable by thumb. */
+    .weekly-actions { gap: 8px; }
+    .weekly-next {
+      order: -1;
+      margin-left: 0;
+      flex: 1 1 100%;
+      padding: 13px 22px;
+    }
+    .weekly-back,
+    .weekly-skip { flex: 1 1 0; padding: 11px 14px; }
+    .weekly-another { padding: 16px 14px; }
+    .weekly-another-pick select,
+    .weekly-another-pick button { flex: 1 1 100%; min-width: 0; }
+  }
