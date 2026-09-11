@@ -1,9 +1,12 @@
 """LLM-based menu PDF extraction. pdfplumber's position-aware extraction
 (see _pdf_text) reconstructs this vendor's PDFs in correct reading order, so
-the LLM just needs to structure already-well-ordered text into JSON. This is
-the primary extraction path when GROQ_API_KEY is configured; refresh_menu()
-falls back to the regex parser on any failure here, since the LLM path is
-inherently non-deterministic.
+the LLM just needs to structure already-well-ordered text into JSON.
+
+This is the only extraction path for PDF attachments -- there is no fallback
+to the regex parser here. menu_parser.parse_menu_email handles the separate
+plain-text-email path only, chosen upstream in fetch_recent_menu_sources by
+whether the email carried a PDF at all, so a MenuExtractionError propagates
+as an EmailPollError rather than degrading to regex.
 """
 
 import logging
