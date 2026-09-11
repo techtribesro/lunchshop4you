@@ -31,6 +31,25 @@ def submit_order(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Submit (replacing) one day's order lines.
+
+    AUTHORIZATION, changed 2026-09-11 by operator decision: `on_behalf_of`
+    lets ANY logged-in user submit for another *existing registered* user.
+    This used to be admin-only (via /admin/orders). Deliberate and reviewed.
+
+    ACCEPTED RISK: the delete-then-reinsert below replaces every row the
+    target user has for that date, so an on-behalf submit silently overwrites
+    a colleague's existing order. The operator was shown this and chose to
+    accept it; do not add merge/confirm/audit machinery to guard it.
+    """
+    order_user = user
+    if payload.on_behalf_of and payload.on_behalf_of != user.username:
+        order_user = db.query(User).filter(User.username == payload.on_behalf_of).first()
+        if order_user is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, f"User '{payload.on_behalf_of}' not found"
+            )
+
     target_date = payload.order_date or today_local()
     _check_ordering_allowed(target_date)
 
@@ -52,11 +71,13 @@ def submit_order(
         if line.quantity < 1:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Quantity must be at least 1")
 
-    db.query(Order).filter(Order.user_id == user.id, Order.order_date == target_date).delete()
+    db.query(Order).filter(
+        Order.user_id == order_user.id, Order.order_date == target_date
+    ).delete()
 
     new_orders = [
         Order(
-            user_id=user.id,
+            user_id=order_user.id,
             order_date=target_date,
             week_start=target_week_start,
             item_name=line.item_name,
@@ -70,7 +91,11 @@ def submit_order(
     db.commit()
     sync_all(db)
 
-    return db.query(Order).filter(Order.user_id == user.id, Order.order_date == target_date).all()
+    return (
+        db.query(Order)
+        .filter(Order.user_id == order_user.id, Order.order_date == target_date)
+        .all()
+    )
 
 
 @router.get("/my-week", response_model=list[OrderLineOut])
@@ -93,8 +118,12 @@ def user_week_orders(
     _user: User = Depends(get_current_user),
 ):
     """Anyone logged in can view anyone else's current-week orders -- backs
-    the "Objednávám za" pill row on the order screen. Only admins can
-    actually submit on someone else's behalf (see /admin/orders)."""
+    the "Objednávám za" pill row on the order screen.
+
+    Since 2026-09-11 any logged-in user can also SUBMIT on another existing
+    user's behalf, via `on_behalf_of` on POST /orders. (This previously said
+    submitting was admin-only through /admin/orders; that is no longer true.)
+    """
     target_user = db.query(User).filter(User.username == username).first()
     if target_user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{username}' not found")
