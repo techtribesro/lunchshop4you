@@ -488,60 +488,170 @@
     padding: 24px 28px 80px;
   }
 
+  /* ---- Day selector: ONE line, five equal columns, fits 390px ----
+     Was two stacked full-width scrolling pill rows (people + days) whose
+     78px-min two-line boxes overflowed at 390px, clipping ČT and pushing PÁ
+     entirely off-screen. Now a 5-column grid that cannot overflow: each
+     column is 1fr of the container, so the row is exactly as wide as the
+     shell at every viewport. The full Czech day name is shown only for the
+     SELECTED day (and only where there is room), which is what made the
+     two-line pill so tall. .is-today dot and aria-current are preserved --
+     t13's sweep asserts day selection. */
   .day-row {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    margin-bottom: 22px;
-    -webkit-mask-image: linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent);
-    mask-image: linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent);
-  }
-  .day-pill {
-    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-bottom: 18px;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 12px;
-    padding: 9px 18px;
-    text-align: center;
-    min-width: 78px;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
+    padding: 4px;
   }
-  .day-pill:hover { border-color: var(--ink-faint); }
-  .day-pill[aria-current="true"]:hover { border-color: var(--accent-strong); }
-  .day-pill .d { font-size: 12.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  .day-pill .n { font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; margin-top: 2px; }
+  .day-pill {
+    position: relative;
+    min-width: 0;            /* allow the grid track to shrink below content */
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 7px 4px;
+    text-align: center;
+    overflow: hidden;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  }
+  .day-pill:hover { background: var(--line-soft); }
+  .day-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .day-pill .d {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+  }
+  /* The long name is secondary: it never dictates the control's width. */
+  .day-pill .n {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-faint);
+    line-height: 1.25;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .day-pill[aria-current="true"] {
     background: var(--accent);
     border-color: var(--accent);
   }
   .day-pill[aria-current="true"] .d,
   .day-pill[aria-current="true"] .n { color: var(--on-accent); }
-  .day-pill.is-today::after {
+  .day-pill.is-today .d::after {
     content: "";
-    display: block;
+    display: inline-block;
     width: 5px;
     height: 5px;
     border-radius: 50%;
     background: var(--warn);
-    margin: 5px auto 0;
+    margin-left: 4px;
+    vertical-align: middle;
   }
-  .day-pill[aria-current="true"].is-today::after { background: var(--on-accent); }
+  .day-pill[aria-current="true"].is-today .d::after { background: var(--on-accent); }
 
+  /* ---- "Objednávám za" read-only viewer, DEMOTED ----
+     t7 built this deliberately and t13 regression-tests the grid, so the
+     control and its semantics stay. But it is irrelevant to the ~95% case
+     (ordering for yourself), and as a permanent full-width pill row it cost
+     the same vertical space as the day selector. It is now a collapsed
+     disclosure that opens on demand. */
+  /* Shares the .on-behalf-bar line rather than occupying a row of its own. */
+  .people-disclosure {
+    position: relative;
+  }
+  /* Opened, the pill list floats over the content instead of pushing every
+     dish further down the page. */
+  .people-disclosure[open] .people-row {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 220px;
+    background: var(--surface-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 10px;
+    margin-top: 0;
+  }
+  .people-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    padding: 5px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-raised);
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .people-summary::-webkit-details-marker { display: none; }
+  .people-summary:hover { border-color: var(--ink-faint); color: var(--ink); }
+  .people-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .people-summary::after {
+    content: "▾";
+    font-size: 10px;
+    transition: transform 0.15s ease;
+  }
+  .people-disclosure[open] .people-summary::after { transform: rotate(180deg); }
+  .people-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .people-row .day-pill {
+    flex: 0 0 auto;
+    min-width: 0;
+    background: var(--surface);
+    border-color: var(--line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+  }
+  .people-row .day-pill[aria-current="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+
+  /* ---- List + summary as ONE bound container ----
+     The rail used to be a detached 320px card floating in whitespace beside
+     the list, connected to nothing. It is now the right-hand column of a
+     shared bordered surface with a single dividing rule between the two, so
+     the total reads as belonging to the list it summarises. */
   .order-grid {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 28px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: stretch;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
   }
+  #menu-list { padding: 6px 0 10px; min-width: 0; }
 
-  .category-block { margin-bottom: 28px; }
+  .category-block { margin-bottom: 6px; }
   .category-title {
-    font-size: 12.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    font-weight: 700;
     color: var(--ink-muted);
-    margin-bottom: 10px;
+    padding: 12px 18px 6px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -553,49 +663,60 @@
     background: var(--line-soft);
   }
 
+  /* ---- Dense dish rows (was a ~130px bordered card per dish) ----
+     One dish is now a single ~56-64px row: name, price and kcal on one
+     line with the stepper pulled in beside them rather than marooned at the
+     far right. Rows are separated by a hairline instead of each being its
+     own box, so a category reads as a list. */
   .item-card {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    display: block;
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--line-soft);
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    transition: background-color 0.15s ease;
   }
-  .item-card:not(.is-readonly):hover {
-    border-color: var(--ink-faint);
-    box-shadow: 0 2px 10px -6px rgba(34, 38, 31, 0.25);
-  }
+  .category-block .item-card:first-of-type { border-top: 0; }
+  .item-card:not(.is-readonly):hover { background: var(--line-soft); }
   .item-card.is-selected {
-    border-color: var(--accent);
     background: var(--accent-tint);
+    box-shadow: inset 3px 0 0 0 var(--accent);
   }
-  .item-card.is-selected:hover { border-color: var(--accent-strong); }
   .item-row {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
+    padding: 10px 18px;
+    min-height: 56px;
   }
-  .item-main { flex: 1; min-width: 0; }
+  .item-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+  }
   .item-name { font-weight: 600; font-size: 14.5px; }
   .item-price {
-    margin-left: 8px;
-    color: var(--ink-muted);
-    font-weight: 500;
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 13.5px;
   }
   .item-kcal {
-    margin-left: 8px;
     color: var(--ink-faint);
     font-size: 12px;
     font-weight: 500;
   }
   .item-kcal::before { content: "· "; }
+  /* The description is supporting detail: it shares the row rather than
+     adding a third line of height. */
   .item-desc {
+    flex: 1 0 100%;
     color: var(--ink-muted);
-    font-size: 13px;
-    margin-top: 3px;
+    font-size: 12.5px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -633,7 +754,7 @@
   .item-card.is-selected .stepper .qty { color: var(--accent-strong); }
 
   .note-row { display: none; }
-  .item-card.is-selected .note-row { display: block; }
+  .item-card.is-selected .note-row { display: block; padding: 0 18px 10px; }
   .note-input {
     width: 100%;
     font: inherit;
@@ -654,17 +775,38 @@
     margin-top: 2px;
   }
 
-  /* ---------- Order summary rail ---------- */
+  /* ---------- Order summary rail ----------
+     No longer a floating card: it is the right column of .order-grid,
+     joined to the list by a shared border rather than separated by a gap. */
   .summary-rail {
     position: sticky;
     top: 100px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 20px;
-    box-shadow: var(--shadow);
+    align-self: start;
+    background: var(--surface-raised);
+    border: 0;
+    border-left: 1px solid var(--line);
+    border-radius: 0;
+    padding: 18px;
+    box-shadow: none;
   }
-  .summary-title { font-size: 15px; margin-bottom: 12px; }
+  .summary-title {
+    font-size: 14px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  /* A running item count makes the rail visibly *of* the list above it. */
+  .summary-count {
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    background: var(--line-soft);
+    border-radius: 999px;
+    padding: 2px 9px;
+  }
   .summary-empty {
     font-size: 13px;
     color: var(--ink-faint);
@@ -903,18 +1045,31 @@
     }
     .link-btn { white-space: nowrap; }
 
-    .order-shell, .dash-shell { padding: 18px 16px 100px; }
+    .order-shell, .dash-shell { padding: 14px 12px 96px; }
 
-    .order-grid { grid-template-columns: 1fr; gap: 20px; }
+    .order-grid { grid-template-columns: 1fr; }
     .summary-rail {
       position: static;
       display: none; /* the mobile action bar below replaces this panel */
     }
 
-    .item-desc { white-space: normal; overflow: visible; text-overflow: clip; }
+    /* Keep dishes to one compact row on a phone: the description is the
+       first thing to go, so more of the week fits above the fold. */
+    .item-desc { display: none; }
+    .item-row { padding: 9px 14px; min-height: 54px; gap: 10px; }
+    .category-title { padding: 10px 14px 5px; }
+    .item-card.is-selected .note-row { padding: 0 14px 9px; }
 
-    .stepper button { width: 38px; height: 38px; font-size: 17px; }
-    .stepper .qty { width: 34px; }
+    .day-row { gap: 4px; padding: 3px; margin-bottom: 10px; }
+    .day-pill { padding: 5px 2px; }
+    .day-pill .d { font-size: 12.5px; }
+    .day-pill .n { font-size: 10px; }
+    /* Every pixel above the first dish is chrome on a phone. */
+    .on-behalf-bar { margin-bottom: 10px; gap: 8px; }
+    .category-block:first-of-type .category-title { padding-top: 6px; }
+
+    .stepper button { width: 36px; height: 36px; font-size: 17px; }
+    .stepper .qty { width: 30px; }
 
     .stat-row { grid-template-columns: repeat(2, 1fr); }
 
@@ -941,6 +1096,13 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--ink-muted);
+    }
+    /* The bar replaces the rail on a phone, so it has to carry the same
+       information the rail did: how many items, not just the amount. */
+    .mobile-actionbar .mob-count {
+      font-size: 11.5px;
+      color: var(--ink-muted);
+      font-weight: 600;
     }
     .mobile-actionbar .mob-total-amount {
       font-family: "Fraunces", serif;
