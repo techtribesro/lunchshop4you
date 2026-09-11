@@ -43,11 +43,12 @@ import pytest
 
 from app.models import Order, TelegramSubscriber
 from app.timezone import today_local, week_start
+from tests.conftest import _next_orderable_weekday
 
 
 @pytest.fixture
 def orderable_weekdays() -> list:
-    """Every weekday of the current menu week that is actually orderable.
+    """Every weekday of the orderable menu week that is actually orderable.
 
     `_check_ordering_allowed` rejects past dates and weekends, so which days
     qualify depends on what day the suite runs. On a Friday this list has a
@@ -55,10 +56,62 @@ def orderable_weekdays() -> list:
     run in this project look green while only ever exercising one day. Tests
     that need more than one orderable day skip explicitly (and say so) rather
     than silently degrading to a single-day check.
+
+    ANCHORED ON conftest's `_next_orderable_weekday`, deliberately, and NOT on
+    `today_local()` directly. This fixture previously filtered the CURRENT
+    week for days >= today. On a Saturday or Sunday every weekday of the
+    current week is already in the past, so the list came back EMPTY and ten
+    tests died on `orderable_weekdays[0]` with IndexError -- the suite was red
+    purely because the calendar rolled over. Re-deriving "orderable" here was
+    the root cause: conftest already owns that definition (today if today is a
+    weekday, else the coming Monday) and `menu_week` seeds exactly the week it
+    lands in, with the same per-weekday item names `_item_for` reconstructs.
+    Two fixtures disagreeing about which days are orderable is what broke;
+    reusing the one definition is what fixes it.
+
+    On a weekday the anchor IS today, so this yields precisely what it always
+    did (Fri -> one day, keeping the skip in
+    `test_multiple_orderable_days_are_independent` meaningful). On a weekend
+    the anchor is the coming Monday and all five days of that seeded week are
+    orderable, so the sweep exercises real journeys instead of opting out.
+    """
+    anchor = _next_orderable_weekday()
+    ws = week_start(anchor)
+    return [ws + timedelta(days=i) for i in range(5) if ws + timedelta(days=i) >= anchor]
+
+
+@pytest.fixture
+def dashboard_order_date():
+    """A weekday of the CURRENT week that `compute_dashboard` actually counts.
+
+    Deliberately a different date from `orderable_weekdays`, because the two
+    routes have genuinely different, pre-existing date rules and on a weekend
+    NO single date satisfies both:
+
+      * POST /orders -> `_check_ordering_allowed` rejects past dates, so it
+        needs a date >= today (on Sat/Sun that is next week's Monday).
+      * GET /dashboard -> `compute_dashboard` filters
+        `order_date <= today_local()` and week-aggregates only rows whose
+        `week_start == week_start()` (the CURRENT week), so it can only ever
+        see a current-week day that is NOT in the future.
+
+    Overlap of those two sets is `[today]` on a weekday and EMPTY on Sat/Sun.
+    So the dashboard tests anchor here instead, and seat their rows through
+    POST /admin/orders -- `assign_order` rejects weekends but deliberately
+    NOT past dates ("Still only allows weekdays in an already-loaded week"),
+    which is a real shipped code path, not a test-only backdoor. That keeps
+    the dashboard assertions exercising real aggregation on every weekday
+    instead of being skipped or weakened on a weekend.
+
+    Returns the latest current-week weekday that is <= today: today itself on
+    a weekday, Friday of the just-finished week on Sat/Sun. `menu_week` seeds
+    the current week, so `_item_for` always resolves.
     """
     today = today_local()
     ws = week_start(today)
-    return [ws + timedelta(days=i) for i in range(5) if ws + timedelta(days=i) >= today]
+    candidates = [ws + timedelta(days=i) for i in range(5) if ws + timedelta(days=i) <= today]
+    assert candidates, f"no current-week weekday on or before {today}"
+    return candidates[-1]
 
 
 def _item_for(order_date, suffix: str = "main 1") -> str:
@@ -249,12 +302,14 @@ class TestDashboardStillAggregates:
     """GET /dashboard -- the data behind the Přehled tab."""
 
     def test_dashboard_returns_rows_and_aggregates_for_an_order(
-        self, logged_in_client, user, menu_week, orderable_weekdays, stub_sheets_sync
+        self, logged_in_client, admin_client, user, menu_week, dashboard_order_date,
+        stub_sheets_sync
     ):
-        order_date = orderable_weekdays[0]
-        logged_in_client.post(
-            "/orders",
+        order_date = dashboard_order_date
+        admin_client.post(
+            "/admin/orders",
             json={
+                "username": user.username,
                 "order_date": order_date.isoformat(),
                 "items": [{"item_name": _item_for(order_date, "soup"), "quantity": 2, "note": ""}],
             },
@@ -277,29 +332,32 @@ class TestDashboardStillAggregates:
         assert data["week_aggregate_kcal"] >= 240
 
     def test_dashboard_aggregates_across_two_users(
-        self, logged_in_client, client, user, other_user, menu_week,
-        orderable_weekdays, stub_sheets_sync
+        self, logged_in_client, admin_client, client, user, other_user, menu_week,
+        dashboard_order_date, stub_sheets_sync
     ):
         """The aggregate is everyone's total, not just the caller's."""
         from tests.conftest import USER_PASSWORD, login_as
 
-        order_date = orderable_weekdays[0]
-        logged_in_client.post(
-            "/orders",
+        order_date = dashboard_order_date
+        admin_client.post(
+            "/admin/orders",
             json={
+                "username": user.username,
                 "order_date": order_date.isoformat(),
                 "items": [{"item_name": _item_for(order_date, "soup"), "quantity": 1, "note": ""}],
             },
         )
-        # Second user orders on their own behalf, through their own session.
-        login_as(client, other_user.username, USER_PASSWORD)
-        client.post(
-            "/orders",
+        # Second user's order, seated the same way so it lands in the window
+        # `compute_dashboard` aggregates over.
+        admin_client.post(
+            "/admin/orders",
             json={
+                "username": other_user.username,
                 "order_date": order_date.isoformat(),
                 "items": [{"item_name": _item_for(order_date, "main 1"), "quantity": 1, "note": ""}],
             },
         )
+        login_as(client, other_user.username, USER_PASSWORD)
 
         data = client.get("/dashboard").json()
         users_with_rows = {r["user"] for r in data["rows"]}
