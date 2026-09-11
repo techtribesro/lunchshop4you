@@ -450,7 +450,19 @@ Current, unresolved behaviour — distinct from §9, which is history. If you ar
 this after a fix has landed, **check the code before trusting this section**; it
 describes the state at the time of writing (September 11, 2026).
 
-- **Weekend submissions are invisible to the reader endpoints.** Order *writes* and order
+*No open issues at present. The weekend read bug described below was fixed before this
+document was merged; it is retained here only because §9 records the reasoning.*
+
+### FIXED 2026-09-11 — weekend submissions were invisible to the reader endpoints
+
+**This is resolved.** `my_week_orders` and `user_week_orders` now filter on
+`menu_target_week_start()` rather than a bare `week_start()`, so the read side matches
+the week the write side actually stores. On a weekday the two helpers agree, so the
+change is a no-op Mon–Fri. A regression test (`tests/test_weekend_read_week.py`) fails
+against the old code and passes against the new. The original description follows, for
+the record:
+
+- **Weekend submissions were invisible to the reader endpoints.** Order *writes* and order
   *reads* disagree about which week they mean when the request happens on a Saturday or
   Sunday:
   - `POST /orders` stores rows under `week_start(target_date)` — derived from the order's
@@ -470,8 +482,9 @@ describes the state at the time of writing (September 11, 2026).
   already encodes the "a weekend call means the upcoming week" rule for menu refreshes
   and is the precedent for how to resolve this.
 
-  Tracked as **t16**, which was still in flight when this section was written — no fix is
-  claimed here.
+  Tracked as **t16**, which landed before this document was merged. The fix is in
+  `app/routers/orders.py` (`my_week_orders` and `user_week_orders`), and
+  `menu_target_week_start` — cited above as the precedent — is exactly what it adopted.
 
 ## 9. History / Notable Fixes
 
