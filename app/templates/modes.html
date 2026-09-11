@@ -8,7 +8,10 @@
 </head>
 <body>
   <div class="topbar">
-    <div class="wordmark"><span class="glyph">Ob</span>ěd</div>
+    <a class="wordmark" href="/modes">
+      <img class="brand-logo" src="/static/gs4u_logo.png?v={{ css_version }}"
+           width="600" height="156" alt="golfshop4you — obědy" />
+    </a>
     <div class="topbar-spacer"></div>
     <div class="user-chip">
       <span class="username">{{ user.username }}</span>
@@ -16,7 +19,7 @@
     <button class="link-btn" type="button" id="logout-btn">Odhlásit</button>
   </div>
 
-  <main class="screen active">
+  <main class="screen active modes-shell">
     <h1>Jak chcete objednávat?</h1>
     <p>Vyberte si režim objednávání. Můžete se sem kdykoliv vrátit.</p>
 

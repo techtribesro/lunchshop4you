@@ -143,20 +143,27 @@
     padding: 36px 32px;
     box-shadow: var(--shadow);
   }
+  /* The brand mark is a raster PNG whose ink is ~67% near-black (#1a171b)
+     and ~20% turquoise (#00a4bc). On the dark ground (--paper #071528) the
+     near-black two thirds would disappear, so dark theme gets a light
+     backing chip rather than a filter -- inverting would preserve the
+     near-black but destroy the turquoise that carries the identity. */
+  .brand-logo {
+    display: block;
+    height: auto;
+    width: auto;
+    /* Rendered from a 600x156 source, so it stays crisp when downscaled. */
+    image-rendering: auto;
+  }
+
   .login-mark {
     display: flex;
-    align-items: baseline;
-    gap: 0;
-    margin-bottom: 4px;
+    align-items: center;
+    margin-bottom: 10px;
   }
-  .login-mark .glyph {
-    font-family: "Fraunces", serif;
-    font-weight: 600;
-    font-size: 28px;
-    color: var(--accent);
-  }
-  .login-mark .word {
-    font-size: 22px;
+  .login-mark .brand-logo {
+    height: 40px;
+    max-width: 100%;
   }
   .login-sub {
     font-style: italic;
@@ -227,14 +234,37 @@
     background: var(--paper);
     border-bottom: 1px solid var(--line);
   }
+  /* Was a text wordmark ("Ob"+"ěd" in a flex row, which is what produced the
+     "Ob ěd" gap bug recorded in REQUIREMENTS.md section 9). It is now a
+     single <img>, so there are no inline children left to gap apart. */
   .wordmark {
-    display: flex;
-    align-items: baseline;
-    gap: 0;
-    font-size: 19px;
-    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    border-radius: 8px;
+    flex: none;
   }
-  .wordmark .glyph { color: var(--accent); font-size: 22px; }
+  .wordmark .brand-logo { height: 28px; }
+  .wordmark:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* Dark theme: give the mark a light chip so its near-black two thirds stay
+     legible against --paper/--surface. Both dark selectors are listed so the
+     prefers-color-scheme path and the explicit opt-in cannot drift. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .brand-logo {
+      background: #ffffff;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+  }
+  :root[data-theme="dark"] .brand-logo {
+    background: #ffffff;
+    padding: 6px 10px;
+    border-radius: 8px;
+  }
 
   .view-nav {
     display: flex;
@@ -786,14 +816,80 @@
   }
   .dash-table tfoot td:first-child { color: var(--accent-strong); }
 
+  /* ---------- Mode chooser (/modes) ---------- */
+  /* Mirrors the .order-shell container convention rather than inventing a
+     second page-shell system. */
+  .modes-shell {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 32px 28px 80px;
+  }
+  .modes-shell h1 { font-size: 26px; }
+  .modes-shell > p {
+    color: var(--ink-muted);
+    margin: 8px 0 28px;
+  }
+  .modes-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .mode-card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px 24px 26px;
+    box-shadow: var(--shadow);
+    transition: border-color 0.15s ease, transform 0.1s ease;
+  }
+  .mode-card h2 {
+    font-size: 19px;
+    margin: 0 0 8px;
+  }
+  /* The <a> stays the real focusable, named control; the pseudo-element just
+     extends its hit area over the whole card. */
+  .mode-card h2 a {
+    text-decoration: none;
+    color: var(--accent);
+  }
+  .mode-card h2 a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+  }
+  .mode-card p {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 14.5px;
+  }
+  .mode-card:hover {
+    border-color: var(--accent-strong);
+    transform: translateY(-1px);
+  }
+  .mode-card:has(a:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .mode-card h2 a:focus-visible { outline: none; }
+
+  @media (max-width: 760px) {
+    .modes-shell { padding: 24px 16px 64px; }
+    .modes-shell h1 { font-size: 22px; }
+    .modes-list { grid-template-columns: 1fr; }
+  }
+
   /* ---------- Mobile bottom action bar (order screen only) ---------- */
   .mobile-actionbar { display: none; }
 
   /* ---------- Small screens ---------- */
   @media (max-width: 760px) {
     .topbar { padding: 12px 16px; gap: 10px 14px; flex-wrap: wrap; }
-    .wordmark { font-size: 17px; }
-    .wordmark .glyph { font-size: 19px; }
+    .wordmark .brand-logo { height: 24px; }
     .view-nav button { padding: 8px 13px; font-size: 13px; }
     .user-chip span.username { display: none; }
     .send-out-btn {
