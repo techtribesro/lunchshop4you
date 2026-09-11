@@ -14,65 +14,79 @@
 }
 
     
+  /* --------------------------------------------------------------------
+     golfshop4you brand palette.
+     VERIFIED values from the live site's inline custom properties:
+       navy #0B1F3A, turquoise #0FA9B8 (hover #0C95A2), light #f5f9fa,
+       muted #647078, border #dce6e9.
+     The identity is NAVY + TURQUOISE -- deliberately NOT green.
+     Token NAMES are unchanged: templates reference them directly
+     (--accent alone 24x), so only the VALUES are re-pointed.
+     NOTE: --on-accent flips to white here. It was #232528 (near-black),
+     which was legible on the old sky-blue accent but would be unreadable
+     dark-on-navy once --accent becomes #0b1f3a.
+     -------------------------------------------------------------------- */
   :root {
-    --paper: #f5f9fc;
+    --paper: #f5f9fa;
     --surface: #ffffff;
     --surface-raised: #ffffff;
-    --ink: #232528;
-    --ink-muted: #5a5f66;
-    --ink-faint: #8b9198;
-    --accent: #009ffd;
-    --accent-strong: #2a2a72;
-    --accent-tint: #eaf6ff;
-    --on-accent: #232528;
-    --line: #d7e6f0;
-    --line-soft: #e5eef5;
+    --ink: #0b1f3a;
+    --ink-muted: #56636b;
+    --ink-faint: #7d8890;
+    --accent: #0b1f3a;
+    --accent-strong: #0c95a2;
+    --accent-tint: #e3f4f6;
+    --on-accent: #ffffff;
+    --line: #dce6e9;
+    --line-soft: #eaf1f3;
     --warn: #ffa400;
     --warn-tint: #ffedcc;
-    --critical: #ffa400;
-    --critical-tint: #ffe3b3;
-    --shadow: 0 1px 2px rgba(35, 37, 40, 0.08), 0 8px 24px -12px rgba(35, 37, 40, 0.2);
+    --critical: #c62828;
+    --critical-tint: #fbe2e2;
+    --shadow: 0 1px 2px rgba(11, 31, 58, 0.08), 0 8px 24px -12px rgba(11, 31, 58, 0.25);
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --paper: #232528;
-      --surface: #2c2f33;
-      --surface-raised: #34383d;
-      --ink: #eaf6ff;
-      --ink-muted: #a9b8c2;
-      --ink-faint: #74838d;
-      --accent: #009ffd;
-      --accent-strong: #4dbcff;
-      --accent-tint: #16324a;
-      --on-accent: #232528;
-      --line: #3a3e44;
-      --line-soft: #2e3237;
+      --paper: #071528;
+      --surface: #0b1f3a;
+      --surface-raised: #102a49;
+      --ink: #eaf4f6;
+      --ink-muted: #a3b4bd;
+      --ink-faint: #7b8c96;
+      --accent: #0fa9b8;
+      --accent-strong: #3fc6d2;
+      --accent-tint: #0e3a4a;
+      --on-accent: #04121f;
+      --line: #1d3b5c;
+      --line-soft: #16304f;
       --warn: #ffa400;
       --warn-tint: #4a3418;
-      --critical: #ffa400;
-      --critical-tint: #4a3418;
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+      --critical: #ef5350;
+      --critical-tint: #4a1c1c;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
     }
   }
+  /* Explicit dark opt-in. MUST stay byte-identical in value to the
+     prefers-color-scheme block above, or the two dark paths drift. */
   :root[data-theme="dark"] {
-    --paper: #232528;
-    --surface: #2c2f33;
-    --surface-raised: #34383d;
-    --ink: #eaf6ff;
-    --ink-muted: #a9b8c2;
-    --ink-faint: #74838d;
-    --accent: #009ffd;
-    --accent-strong: #4dbcff;
-    --accent-tint: #16324a;
-    --on-accent: #232528;
-    --line: #3a3e44;
-    --line-soft: #2e3237;
+    --paper: #071528;
+    --surface: #0b1f3a;
+    --surface-raised: #102a49;
+    --ink: #eaf4f6;
+    --ink-muted: #a3b4bd;
+    --ink-faint: #7b8c96;
+    --accent: #0fa9b8;
+    --accent-strong: #3fc6d2;
+    --accent-tint: #0e3a4a;
+    --on-accent: #04121f;
+    --line: #1d3b5c;
+    --line-soft: #16304f;
     --warn: #ffa400;
     --warn-tint: #4a3418;
-    --critical: #ffa400;
-    --critical-tint: #4a3418;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+    --critical: #ef5350;
+    --critical-tint: #4a1c1c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
   }
 
   * { box-sizing: border-box; }
@@ -302,6 +316,140 @@
     transition: color 0.15s ease;
   }
   .link-btn:hover { color: var(--ink); }
+
+  /* ---------- Chip button ----------
+     NOTE: .chip-btn is used by app.html (on-behalf controls, modal
+     actions) but had NO rule anywhere in this stylesheet -- those buttons
+     were rendering as raw browser default buttons. Defining it here. */
+  .chip-btn {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .chip-btn:hover {
+    border-color: var(--accent-strong);
+    color: var(--accent-strong);
+  }
+  .chip-btn:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+
+  /* ---------- Ordering on someone else's behalf ----------
+     This state MUST be unmistakable: a user must never submit an order for
+     a colleague believing it is their own. Before this, the state was
+     conveyed only by Czech copy + role="status" + a body class, with no
+     visual signal at all. The signals are deliberately redundant so the
+     cue does not depend on colour perception alone:
+       1. a thick turquoise page-edge frame (body.is-ordering-on-behalf)
+       2. a high-contrast turquoise banner naming the colleague
+       3. a persistent "⇄" glyph in the banner
+       4. a turquoise-tinted order shell background
+     ------------------------------------------------------------------- */
+  .on-behalf-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .on-behalf-picker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+  .on-behalf-picker[hidden] { display: none; }
+  .on-behalf-picker label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .on-behalf-picker select {
+    font: inherit;
+    font-size: 13.5px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface-raised);
+    color: var(--ink);
+    min-width: 180px;
+  }
+  .on-behalf-picker select:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 1px;
+  }
+
+  .on-behalf-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    background: var(--accent-strong);
+    color: #ffffff;
+    border: 2px solid var(--accent-strong);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-size: 14.5px;
+    line-height: 1.45;
+    box-shadow: 0 4px 16px -8px rgba(12, 149, 162, 0.8);
+  }
+  .on-behalf-banner[hidden] { display: none; }
+  .on-behalf-banner::before {
+    content: "⇄";
+    flex: 0 0 auto;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .on-behalf-banner strong { font-weight: 700; }
+  /* The exit button sits on the turquoise banner, so it needs its own
+     inverted treatment rather than the default chip colours. */
+  .on-behalf-banner .chip-btn {
+    margin-left: auto;
+    background: #ffffff;
+    color: #0b1f3a;
+    border-color: #ffffff;
+  }
+  .on-behalf-banner .chip-btn:hover {
+    background: #eaf4f6;
+    color: #0b1f3a;
+    border-color: #eaf4f6;
+  }
+  .on-behalf-banner .chip-btn:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 3px;
+  }
+
+  /* Whole-page framing so the state is obvious even when the banner has
+     been scrolled past. */
+  body.is-ordering-on-behalf {
+    box-shadow: inset 0 0 0 4px var(--accent-strong);
+  }
+  body.is-ordering-on-behalf .order-shell {
+    background: var(--accent-tint);
+    border-radius: 14px;
+  }
+  body.is-ordering-on-behalf .summary-rail {
+    border-color: var(--accent-strong);
+  }
+  /* Submitting is the irreversible act -- mark that control too. */
+  body.is-ordering-on-behalf .btn-primary {
+    background: var(--accent-strong);
+    color: #ffffff;
+  }
 
   /* ---------- Order screen ---------- */
   .order-shell {
