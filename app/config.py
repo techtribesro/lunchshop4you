@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = ""
 
     groq_api_key: str = ""
-    groq_model: str = "qwen/qwen3.8-27b"
+    groq_model: str = "openai/gpt-oss-120b"
 
     session_secret: str = "change-me"
     session_idle_timeout_hours: int = 24
