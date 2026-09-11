@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -37,6 +38,40 @@ DAY_LABELS_CZ = {
 }
 
 
+def menu_by_day(db: Session, ws) -> dict[str, list[dict]]:
+    """Serialize one week's menu, grouped by Czech weekday label.
+
+    Shared by the order grid (/orders) and the guided weekly prompt
+    (/modes/weekly) so the two screens cannot drift apart. Every weekday label
+    is always present as a key, even with no menu loaded -- callers render an
+    empty list rather than having to guard for a missing day.
+
+    The per-item keys (cat/name/desc/price/kcal) are the contract app.html's
+    MENU constant already consumes; do not rename them without updating it.
+    """
+    week_items = (
+        db.query(MenuItem)
+        .filter(MenuItem.week_start == ws)
+        .order_by(MenuItem.day, MenuItem.category, MenuItem.item_name)
+        .all()
+    )
+    grouped: dict[str, list[dict]] = {label: [] for label in DAY_LABELS_CZ.values()}
+    for item in week_items:
+        label = DAY_LABELS_CZ.get(item.day)
+        if label is None:
+            continue
+        grouped[label].append(
+            {
+                "cat": item.category,
+                "name": item.item_name,
+                "desc": item.description,
+                "price": item.price_czk,
+                "kcal": item.calories_kcal,
+            }
+        )
+    return grouped
+
+
 @router.get("/login")
 def login_page(request: Request, user: User | None = Depends(get_current_user_optional)):
     if user is not None:
@@ -62,21 +97,64 @@ def modes_page(request: Request, user: User | None = Depends(get_current_user_op
 
 
 @router.get("/modes/weekly")
-def weekly_prompt_placeholder(
-    request: Request, user: User | None = Depends(get_current_user_optional)
+def weekly_prompt_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_current_user_optional),
 ):
-    """Placeholder for Mode 1, the guided weekly prompt.
+    """Mode 1 -- the guided weekly prompt.
 
-    The real flow is built in a later task; this exists so the chooser's Mode 1
-    card links somewhere that returns 200 instead of 404. The path is the one
-    the finished prompt will take over, so the chooser needs no edit then.
+    Serves the page plus the serialized week the client script steps through.
+    The step-by-step interaction itself is built on top of this payload; this
+    route only exposes the data.
+
+    Per-day dates are computed HERE rather than in JS. The order grid derives
+    them client-side (app.html's dateForDay) and carries a scar comment about
+    toISOString() shifting the date back a day in UTC+ timezones; deriving them
+    server-side from week_start()/today_local() keeps that bug from reappearing
+    in a second place and gives the client an order_date it can post verbatim.
+
+    `orderable` mirrors app/routers/orders.py::_check_ordering_allowed (no past
+    dates, no weekends) so the client can skip or mark non-orderable days
+    instead of letting a submit come back 400.
     """
     if user is None:
         return RedirectResponse("/login", status_code=303)
+
+    today = today_local()
+    ws = week_start(today)
+    grouped_menu = menu_by_day(db, ws)
+
+    days = []
+    for index, day_name in enumerate(DAY_NAMES):
+        label = DAY_LABELS_CZ[day_name]
+        day_date = ws + timedelta(days=index)
+        days.append(
+            {
+                "label": label,
+                "date": day_date.isoformat(),
+                "items": grouped_menu[label],
+                # Weekday by construction (DAY_NAMES is Mon-Fri), so only the
+                # past-date half of _check_ordering_allowed can fail here.
+                "orderable": day_date >= today,
+            }
+        )
+
+    # True only when the whole week is empty -- a single loaded day still gets
+    # the prompt, with the empty days marked. Drives the Czech empty state.
+    has_menu = any(day["items"] for day in days)
+
     return templates.TemplateResponse(
         request,
-        "weekly_placeholder.html",
-        {"user": user, "css_version": CSS_VERSION},
+        "weekly.html",
+        {
+            "user": user,
+            "days": days,
+            "has_menu": has_menu,
+            "today_iso": today.isoformat(),
+            "week_start_iso": ws.isoformat(),
+            "css_version": CSS_VERSION,
+        },
     )
 
 
@@ -99,20 +177,7 @@ def order_page(
         .order_by(MenuItem.day, MenuItem.category, MenuItem.item_name)
         .all()
     )
-    menu_by_day: dict[str, list[dict]] = {label: [] for label in DAY_LABELS_CZ.values()}
-    for item in week_items:
-        label = DAY_LABELS_CZ.get(item.day)
-        if label is None:
-            continue
-        menu_by_day[label].append(
-            {
-                "cat": item.category,
-                "name": item.item_name,
-                "desc": item.description,
-                "price": item.price_czk,
-                "kcal": item.calories_kcal,
-            }
-        )
+    grouped_menu = menu_by_day(db, ws)
 
     today_label = DAY_LABELS_CZ.get(DAY_NAMES[today.weekday()]) if is_weekday else None
     calories_by_item_name = {item.item_name: item.calories_kcal for item in week_items}
@@ -139,7 +204,7 @@ def order_page(
         "app.html",
         {
             "user": user,
-            "menu_by_day": menu_by_day,
+            "menu_by_day": grouped_menu,
             "day_labels": list(DAY_LABELS_CZ.values()),
             "today_label": today_label,
             "orders_by_day": orders_by_day,

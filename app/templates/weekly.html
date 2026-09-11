@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oběd — týdenní objednávka</title>
+  <link rel="stylesheet" href="/static/css/app.css?v={{ css_version }}" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="wordmark"><span class="glyph">Ob</span>ěd</div>
+    <nav class="view-nav">
+      <a href="/modes">Výběr režimu</a>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="user-chip">
+      <span class="username">{{ user.username }}</span>
+    </div>
+    <button class="link-btn" type="button" id="logout-btn">Odhlásit</button>
+  </div>
+
+  <main class="screen active">
+    <h1>Týdenní objednávka</h1>
+
+    {% if not has_menu %}
+    {# Whole week empty -- the menu for this week hasn't been loaded yet. #}
+    <section id="weekly-empty">
+      <p>Pro tento týden zatím není načtené žádné menu.</p>
+      <p>Zkuste to prosím později, nebo se vraťte na
+         <a href="/modes">výběr režimu</a>.</p>
+    </section>
+    {% else %}
+    <p>Projdeme spolu týden den po dni. U každého dne si vyberete jídlo
+       a můžete přidat poznámku.</p>
+
+    {# Server-rendered fallback: the guided step-by-step interaction is layered
+       on top of this markup by the client script. Without JS the whole week is
+       still readable here. #}
+    <div id="weekly-prompt">
+      {% for day in days %}
+      <section class="weekly-day" data-day-date="{{ day.date }}">
+        <h2>{{ day.label }}</h2>
+        {% if not day.items %}
+        <p>Pro tento den není načtené menu.</p>
+        {% elif not day.orderable %}
+        <p>Tento den už nelze objednat.</p>
+        {% endif %}
+        {% if day.items %}
+        <ol class="weekly-choices">
+          {% for item in day["items"] %}
+          <li>
+            <span class="item-name">{{ item.name }}</span>
+            {% if item.desc %}<span class="item-desc">{{ item.desc }}</span>{% endif %}
+            <span class="item-price">{{ item.price }} Kč</span>
+            {% if item.kcal %}<span class="item-kcal">{{ item.kcal }} kcal</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </main>
+
+  <script>
+    // Data contract for the guided prompt. WEEK is ordered Monday..Friday and
+    // every weekday is always present, even with no items, so the client can
+    // iterate without guarding for missing days.
+    //   day.label     -- Czech weekday label (DAY_LABELS_CZ)
+    //   day.date      -- ISO date, post verbatim as POST /orders order_date
+    //   day.orderable -- false for past days; mirrors _check_ordering_allowed
+    //   day.items[]   -- {cat, name, desc, price, kcal}, same shape as app.html's MENU
+    const WEEK = {{ days | tojson }};
+    const HAS_MENU = {{ has_menu | tojson }};
+    const TODAY_ISO = {{ today_iso | tojson }};
+    const WEEK_START_ISO = {{ week_start_iso | tojson }};
+    const USERNAME = {{ user.username | tojson }};
+
+    document.getElementById("logout-btn").addEventListener("click", async () => {
+      await fetch("/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+  </script>
+</body>
+</html>
