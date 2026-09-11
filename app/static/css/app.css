@@ -1445,6 +1445,126 @@
   .weekly-next:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .weekly-next[hidden] { display: none; }
 
+  /* ---------- Mode 1: SINGLE-SCREEN whole-week form (t18) ----------
+     The operator replaced the five-step pacing with one screen showing the
+     whole week. The CONTENT is unchanged -- lettered a/b/c radios plus an
+     optional per-day note -- so this reuses the .weekly-option / .weekly-note
+     rules above verbatim and only adds the week-level scaffolding.
+
+     The hard constraint this layout solves: at 390px five days of options
+     are far taller than the viewport, so the primary action cannot live at
+     the end of the list. It is pinned in a sticky bar instead, which keeps
+     "Objednat celý týden" on screen at every scroll position -- the
+     above-the-fold quality bar t11 set, preserved while showing 5x as much.
+     -------------------------------------------------------------------- */
+  .weekly-week[hidden] { display: none; }
+
+  .weekly-week-status {
+    margin: 0 0 14px;
+    font-size: 13.5px;
+    color: var(--critical);
+  }
+  .weekly-week-status:empty { display: none; }
+  .weekly-week-status:not(:empty) {
+    background: var(--critical-tint);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+
+  .weekly-days {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* One card per weekday: same bordered-card language as .weekly-step, but
+     tighter, because five of them share the screen. */
+  .weekly-day-block {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+  }
+  .weekly-day-block .weekly-options {
+    border: none;
+    margin: 0;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  /* The day name IS the group's accessible name (fieldset > legend), so the
+     ARIA tree still reads "group: Pondělí" per day. */
+  /* Scoped to beat `.weekly-options legend` (0,1,1) above, which would
+     otherwise force these day names to ALL-CAPS. The weekday is a proper
+     noun here, not a section eyebrow. */
+  .weekly-options legend.weekly-day-legend {
+    padding: 0;
+    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--ink);
+    margin-bottom: 4px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .weekly-day-block .weekly-option-label {
+    padding: 11px 14px 11px 42px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+  .weekly-day-block .weekly-option-input { margin: 13px 0 0 14px; }
+  .weekly-day-block .weekly-note-row { margin-top: 12px; }
+
+  /* Past days / days with no menu: visibly inert and unsubmittable. The
+     fieldset is `disabled`, so this is a real interaction state, not paint. */
+  .weekly-day-block.is-unavailable {
+    background: var(--line-soft);
+    box-shadow: none;
+  }
+  .weekly-day-block.is-unavailable .weekly-day-legend { color: var(--ink-muted); }
+  .weekly-day-unavailable {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+  }
+
+  /* ---- sticky submit bar ---- */
+  .weekly-submitbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 14px 0 12px;
+    background: linear-gradient(to bottom, transparent, var(--paper) 22%);
+  }
+  .weekly-tally {
+    margin: 0;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+  }
+  .weekly-submit {
+    margin-left: auto;
+    background: var(--accent);
+    color: var(--on-accent);
+    border: none;
+    border-radius: 999px;
+    padding: 13px 28px;
+    font-weight: 600;
+    font-size: 15px;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+  .weekly-submit:hover:not(:disabled) { background: var(--accent-strong); }
+  .weekly-submit:active:not(:disabled) { transform: translateY(1px); }
+  .weekly-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .weekly-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   /* ---- end-of-week + empty states ---- */
   .weekly-done-summary {
     margin: 6px 0 0;
