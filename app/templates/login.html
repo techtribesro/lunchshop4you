@@ -47,7 +47,11 @@
       });
 
       if (resp.ok) {
-        window.location.href = "/orders";
+        // Must match POST_LOGIN_PATH in app/routers/pages.py. The server-side
+        // redirects never fire on this path -- the form posts via fetch and
+        // navigates itself -- so leaving this as "/orders" would skip the mode
+        // chooser entirely for every real login.
+        window.location.href = "/modes";
       } else {
         const body = await resp.json().catch(() => ({}));
         errorEl.textContent = body.detail || "Přihlášení se nezdařilo.";
