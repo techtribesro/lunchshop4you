@@ -1,6 +1,6 @@
 # Lunch Ordering Web App – Requirements
 
-**Last updated:** August 12, 2026
+**Last updated:** September 11, 2026
 **Timezone:** CET/CEST (Prague)
 **Users:** 6–7, one office
 **Stack:** Python 3.11 / FastAPI, server-rendered Jinja2 templates + vanilla JS, SQLite, Fly.io
@@ -17,15 +17,24 @@ instead of JWT**.
 - A `BackgroundScheduler` (APScheduler) job polls Gmail via IMAP every **Sunday at 18:00
   Prague time**, scanning the most recent messages in the inbox (optionally filtered by
   `MENU_EMAIL_SENDER`) for the weekly menu.
-- If the email has a **PDF attachment**, the whole PDF is sent to **Gemini**
-  (`gemini-flash-latest`, raw REST call, no SDK) with a structured JSON response schema.
-  Gemini returns, per item: day, category, name, description, price (CZK), and an
-  **estimated calorie count** — extraction and calorie estimation happen in the **same
-  API call**, not two, to stay inside Gemini's free-tier quota (see §6).
+- If the email has a **PDF attachment**, its text is extracted locally with
+  **pdfplumber** (`app/services/menu_llm_extractor.py::_pdf_text`) — this is the **sole
+  PDF-text path**, and it is position-aware, so the vendor's column/row layout survives
+  instead of being flattened out of order.
+- That extracted *text* (not the raw PDF) is then sent to **Groq**
+  (`openai/gpt-oss-120b`, via the official `groq` SDK — `app/services/llm_client.py`,
+  configured by `GROQ_API_KEY` / `GROQ_MODEL` in `app/config.py`). Groq returns, per
+  item: day, category, name, description, price (CZK), and an **estimated calorie
+  count** — extraction and calorie estimation happen in the **same API call**, not two
+  (see §6).
+- Groq exposes no `responseSchema` equivalent (Gemini, the previous provider, did), so
+  the required JSON shape is spelled out in the prompt itself and the reply is parsed and
+  validated on our side. A reply truncated at the output-token limit is raised as an
+  explicit `LLMError` rather than half-parsed.
 - If there's no PDF (rare, plain-text fallback), the body is parsed with a regex-based
   parser (`app/services/menu_parser.py`) that splits on the Czech day headers (PONDĚLÍ,
   ÚTERÝ, STŘEDA, ČTVRTEK, PÁTEK) and category labels, then calorie counts for that path
-  are estimated with a **second, separate** Gemini call (`calorie_estimator.py`) since
+  are estimated with a **second, separate** LLM call (`calorie_estimator.py`) since
   there's no PDF call to piggyback on.
 - Categories: Polévka (soup), Hlavní jídlo 1–3 (mains), Vege. jídlo (vegetarian). Not
   every day has every category.
@@ -42,6 +51,95 @@ instead of JWT**.
 ## 2. Ordering
 
 - Login required (username + password).
+
+### 2.1 Mode chooser
+
+After a successful login the user lands on **`/modes`** (`POST_LOGIN_PATH` in
+`app/routers/pages.py`), a chooser between the two ways of ordering:
+
+- **Mode 1 — Weekly order** (`/modes/weekly`): the guided prompt, §2.2.
+- **Mode 2 — Oldschool order** (`/orders`): the existing order grid, unchanged.
+
+The chooser is **deliberately not a one-time gate**. It is a plain `GET` that holds no
+state and sets no "already chosen" flag, the order screen links back to it, and both
+modes stay reachable at any time. Deep links to `/orders` and the existing redirect flow
+still work; an unauthenticated hit on either mode redirects to `/login`.
+
+### 2.2 Mode 1 — guided weekly prompt
+
+A step-by-step flow that walks the loaded menu week one weekday at a time:
+
+- Each day's items are presented as a simple **lettered (a/b/c…) choice**, with an
+  optional **free-text note** per selection (same `Order.note`, 255 chars, as the grid).
+- Per-day dates are computed **server-side** in `weekly_prompt_page` rather than derived
+  in JS, and handed to the client as an `order_date` it posts verbatim. (The grid derives
+  them client-side and carries a scar comment about `toISOString()` shifting the date
+  back a day in UTC+ timezones; computing them once on the server keeps that bug from
+  reappearing in a second place.)
+- Each day carries an `orderable` flag mirroring `_check_ordering_allowed` (no past
+  dates, no weekends) so non-orderable days are marked or skipped client-side instead of
+  letting a submit come back `400`.
+- A week with no menu at all drives a Czech empty state; a partially loaded week still
+  gets the prompt, with the empty days marked.
+- **After the last day**, the flow asks whether the user wants to order for someone
+  else; if yes, it asks who (an existing registered user) and re-runs the same prompt for
+  that person — see §2.3.
+
+Each completed day persists through the existing `POST /orders` contract; the prompt
+introduces no new write path.
+
+### 2.3 Ordering on someone else's behalf
+
+**Any logged-in user — not only admins — may submit an order for another _existing
+registered_ user**, by setting `on_behalf_of` (a username) on `POST /orders`. An unknown
+username is rejected with `404` before any write. This is available from **both** modes:
+the guided prompt's end-of-week loop (§2.2) and a **dedicated button** in the oldschool
+grid. In the grid, browsing the read-only "Objednávám za" pill row stays read-only —
+submitting for someone else requires explicitly entering on-behalf mode via that button.
+
+- **Authorization change, deliberate and reviewed.** This was previously admin-only, via
+  `POST /admin/orders`. It was opened up on **2026-09-11** by explicit operator decision.
+  **Rationale:** a small, trusted office; the app replaces a shared spreadsheet that had
+  exactly the same property (anyone could edit anyone's row). The change is explicit in
+  the code — `app/schemas.py` (`on_behalf_of`), and the `submit_order` docstring in
+  `app/routers/orders.py` — rather than a silent side effect.
+- **No schema change.** `Order.user_id` remains a hard FK and the
+  unique `(user_id, order_date, item_name)` constraint is untouched. There is
+  deliberately **no `submitted_by` column**, so after the fact an on-behalf row is
+  indistinguishable from one the target placed themselves.
+- **Ordering rules are not bypassed.** On-behalf submissions go through the same
+  `_check_ordering_allowed` as self-service (no past dates, no weekends, cutoff). Only
+  the admin path (`POST /admin/orders`, §5) bypasses the cutoff.
+
+#### ACCEPTED RISK — overwrite on submit (operator decision, 2026-09-11)
+
+This is a **documented, accepted decision, not a defect.**
+
+`POST /orders` deletes every row the target user has for that date before re-inserting.
+Consequently **any logged-in user can silently replace a colleague's existing order for
+a date.** There is no confirmation, no merge, and no record of who submitted it; the
+overwritten user is not notified, and the previous choice is gone rather than versioned.
+
+The operator was shown this explicitly and was offered **merge-instead-of-replace, a
+confirmation step, and an audit trail — and declined all three**, for the reason above.
+Guards for this were therefore deliberately *not* built; do not add them back as a
+"fix".
+
+Related, recorded so it is not a surprise in production: a submit with an **empty item
+list** on someone's behalf returns `200` and **clears that user's order for the date
+entirely**, writing no replacement. It is the same accepted delete-then-reinsert path
+with nothing to re-insert — not a separate delete route, and not separately guarded.
+
+The blast radius of one submit is exactly one `(user_id, order_date)` pair; it cannot
+reach another person's rows or another date.
+
+**The full authorization surface review — every endpoint accepting an on-behalf target,
+the admin-only endpoint audit, and the runtime probes behind these claims — is in
+[`SECURITY_REVIEW_ON_BEHALF.md`](SECURITY_REVIEW_ON_BEHALF.md).** It is not duplicated
+here.
+
+### 2.4 The order grid (mode 2)
+
 - The order page shows all five weekdays as day pills; the current day is marked, and an
   admin-opened "early" day (see below) is marked separately. Each day's menu shows every
   category, with price and estimated kcal per item.
@@ -104,18 +202,19 @@ Gated by `is_admin` (`require_admin` dependency, 403 otherwise). Available actio
 - Estimated kcal per dish is shown on menu item cards, in the order summary panel (a
   running total for the current cart, including early-ordering carts), and in
   weekly/monthly dashboard totals.
-- Sourced from Gemini as part of the PDF-extraction call described in §1 — **not** a
-  separate call — because Gemini's free tier caps at **20 requests/day per project per
-  model**, shared across menu parsing and (rarely) the text-fallback calorie call. A
-  second daily consumer (e.g. Gemini-generated order-summary copy) was deliberately
-  removed for the same reason — see §8.
+- Sourced from the extraction LLM (currently **Groq**, see §1) as part of the same
+  PDF-extraction call — **not** a separate call. The single-call design originally
+  existed to stay inside **Gemini's** free tier of 20 requests/day per project per model,
+  back when Gemini was the provider; that constraint is also why the order-summary email
+  copy is hardcoded rather than generated (see § Email and §9). The merged call was kept
+  after the move to Groq — it is cheaper and one round-trip is less to go wrong.
 - Values are best-effort LLM estimates, not authoritative nutrition data.
 - **Manual backfill:** `POST /admin/menu/calories` lets an admin set `calories_kcal` for
-  specific (day, item_name) rows in the current week directly, bypassing Gemini
+  specific (day, item_name) rows in the current week directly, bypassing the LLM
   entirely. This exists for cases like a menu parsed before the kcal feature existed (so
-  every row is `null`), or when quota is tight and rough hand-entered estimates are good
-  enough for the day — no Gemini call spent, and the next scheduled/triggered re-parse
-  overwrites these with real Gemini estimates anyway.
+  every row is `null`), or when rough hand-entered estimates are good enough for the day
+  — no LLM call spent, and the next scheduled/triggered re-parse overwrites these with
+  real model estimates anyway.
 - **Manual price backfill:** `POST /admin/menu/prices` is the equivalent for
   `price_czk` — sets absolute prices for specific (day, item_name) rows. Deliberately
   absolute rather than relative/incremental: an earlier relative "subtract 50" version
@@ -244,8 +343,12 @@ purely so the data is human-browsable/auditable outside the app.
 ## API/Endpoints
 
 ### Pages (server-rendered)
-- `GET /login` — login form, redirects to `/orders` if already authenticated
-- `GET /orders` — main app page (menu, cart, dashboard, admin panel if `is_admin`)
+- `GET /login` — login form; a successful login lands on `/modes` (§2.1), not `/orders`
+- `GET /modes` — the mode chooser (§2.1). Redirects to `/login` if not authenticated.
+  Re-enterable at any time; it is not a one-time gate
+- `GET /modes/weekly` — mode 1, the guided weekly prompt (§2.2); serves the page plus the
+  serialized week (per-day dates and an `orderable` flag) the client steps through
+- `GET /orders` — mode 2, main app page (menu, cart, dashboard, admin panel if `is_admin`)
 
 ### Auth
 - `POST /login` — username + password → session cookie
@@ -257,8 +360,12 @@ purely so the data is human-browsable/auditable outside the app.
 
 ### Orders
 - `POST /orders` — submit/replace an order for a given date (today, or an
-  early-opened date)
+  early-opened date). Accepts an optional **`on_behalf_of`** username to submit for
+  another existing registered user — available to **any logged-in user**, not just
+  admins (§2.3); unknown username → `404`. Replaces the target's rows for that date
 - `GET /orders/my-week` — caller's current-week orders
+- `GET /orders/week/{username}` — any logged-in user may *view* any user's current-week
+  orders (backs the "Objednávám za" pill row and the on-behalf flows)
 
 ### Dashboard
 - `GET /dashboard` — all users' daily/weekly/monthly spend + kcal totals
@@ -321,7 +428,7 @@ purely so the data is human-browsable/auditable outside the app.
 - Persistent volume `lunchshop_data` mounted at `/data` for the SQLite file.
 - `min_machines_running = 1`, `auto_stop_machines = false` — always-on, no cold starts.
 - Secrets requiring inline JSON (`GOOGLE_SERVICE_ACCOUNT_JSON`) or other credentials
-  (`GEMINI_API_KEY`, `GMAIL_IMAP_PASSWORD`, `SESSION_SECRET`, `ADMIN_PASSWORD`, etc.) are
+  (`GROQ_API_KEY`, `GMAIL_IMAP_PASSWORD`, `SESSION_SECRET`, `ADMIN_PASSWORD`, etc.) are
   set via `fly secrets set`, not `fly.toml` — Fly secrets are env-var-only, no file
   mounts, so anything expected as a file path locally is passed as inline content in
   production and handled accordingly by the reading code (see `sheets_sync.py`).
@@ -337,20 +444,66 @@ purely so the data is human-browsable/auditable outside the app.
 
 ---
 
+## 8. Known Issues (open)
+
+Current, unresolved behaviour — distinct from §9, which is history. If you are reading
+this after a fix has landed, **check the code before trusting this section**; it
+describes the state at the time of writing (September 11, 2026).
+
+- **Weekend submissions are invisible to the reader endpoints.** Order *writes* and order
+  *reads* disagree about which week they mean when the request happens on a Saturday or
+  Sunday:
+  - `POST /orders` stores rows under `week_start(target_date)` — derived from the order's
+    own date, which on a weekend is the **upcoming** week.
+  - `GET /orders/my-week` and `GET /orders/week/{username}` both filter on a bare
+    `week_start()` — which resolves to the Monday of the **current** week (on a Sunday,
+    the week that is ending that day, not the one about to start).
+
+  The practical effect: a user who places an order over the weekend **cannot see the
+  order they just placed** — the write succeeds and the rows exist, but the reads look
+  under the wrong Monday. Weekday use is unaffected, since both sides then resolve to the
+  same week.
+
+  The two reader call sites are the `week_start()` filters in `my_week_orders` and
+  `user_week_orders` in `app/routers/orders.py` (at the time of writing, lines 108 and
+  132). Compare `app/timezone.py::week_start` with `menu_target_week_start`, which
+  already encodes the "a weekend call means the upcoming week" rule for menu refreshes
+  and is the precedent for how to resolve this.
+
+  Tracked as **t16**, which was still in flight when this section was written — no fix is
+  claimed here.
+
 ## 9. History / Notable Fixes
 
 Kept briefly for context on why the app looks the way it does — not requirements, just
 provenance for anyone reading the code later:
 
-- **pdfplumber removed entirely.** It was the fallback PDF-text-extraction path used
-  before the Gemini-based extractor existed, and its memory footprint (PDF rendering +
-  concurrent Gemini calls) caused a production OOM kill on the 256 MB machine. Since
-  Gemini extraction has been 100% reliable, the fallback was dropped rather than kept
-  as dead weight — image size dropped ~92 MB → 75 MB, and 256 MB RAM was confirmed
-  sufficient again afterward.
-- **Gemini free-tier quota (20 req/day)** shapes several decisions in this document:
-  merging calorie estimation into the PDF-extraction call (§6), and hardcoding the
-  order-summary email copy instead of generating it (§ Email).
+- **pdfplumber: dropped once, and now back as the only PDF-text path.** An earlier
+  revision of this document stated "pdfplumber removed entirely"; **that is no longer
+  true and should not be relied on.** pdfplumber was originally a *fallback* text path
+  alongside an extractor that sent the whole PDF to the model, and it was removed after
+  its memory footprint (PDF rendering + concurrent LLM calls) contributed to a production
+  OOM kill on the 256 MB machine. The current design is the other way round: pdfplumber
+  extracts the text **locally and always** (`menu_llm_extractor.py::_pdf_text`) and only
+  that text goes to the LLM — which is both cheaper and more reliable on this vendor's
+  column layout. The machine is back at 512 MB (see the second OOM incident below), so
+  the original memory argument no longer applies.
+- **Provider moved from Gemini to Groq.** The extractor now calls Groq
+  (`openai/gpt-oss-120b`); see §1. Gemini references that remain in this section are
+  **history**, retained because the Gemini free-tier quota is the actual reason several
+  still-current design choices look the way they do.
+- **Gemini free-tier quota (20 req/day)** — a *historical* constraint, from when Gemini
+  was the provider — shapes several decisions in this document: merging calorie
+  estimation into the PDF-extraction call (§6), and hardcoding the order-summary email
+  copy instead of generating it (§ Email). Both were kept after the provider change on
+  their own merits.
+- **Brand palette: navy + turquoise, not green.** When the golfshop4you re-theme was
+  specified the operator first answered that "green from the logo is enough", believing
+  the real palette could not be extracted from the shop. It could: the verified identity
+  is **navy (`#0B1F3A`) + turquoise (`#0FA9B8`)** with **no green** in it, taken from the
+  live site's own CSS custom properties. The operator was re-asked and confirmed the real
+  tokens. Recorded because the earlier "green" instruction is still in the run history
+  and is superseded.
 - **bcrypt via the raw `bcrypt` package**, not `passlib` — `passlib` is incompatible
   with `bcrypt>=4.1`.
 - **Sticky topbar overlap bug**: `.topbar { top: 41px }` was copied verbatim from an
