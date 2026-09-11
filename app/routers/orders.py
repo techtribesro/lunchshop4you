@@ -6,7 +6,7 @@ from app.db import get_db
 from app.models import MenuItem, Order, User
 from app.schemas import OrderLineOut, OrderSubmitRequest
 from app.services.sheets_sync import sync_all
-from app.timezone import today_local, week_start
+from app.timezone import menu_target_week_start, today_local, week_start
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -103,9 +103,17 @@ def my_week_orders(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """The orderable week, which on a weekend is the UPCOMING one.
+
+    Must use `menu_target_week_start()`, not `week_start()`: submitting rolls
+    a weekend order forward to the coming Monday and stores `Order.week_start`
+    for THAT week, so filtering on the current (outgoing) week returned [] and
+    a user who had just ordered saw nothing. On a weekday the two agree, so
+    this is a no-op Mon-Fri.
+    """
     return (
         db.query(Order)
-        .filter(Order.user_id == user.id, Order.week_start == week_start())
+        .filter(Order.user_id == user.id, Order.week_start == menu_target_week_start())
         .order_by(Order.order_date, Order.item_name)
         .all()
     )
@@ -129,7 +137,9 @@ def user_week_orders(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{username}' not found")
     return (
         db.query(Order)
-        .filter(Order.user_id == target_user.id, Order.week_start == week_start())
+        # Same weekend correction as /my-week above: match the week the submit
+        # path actually writes to, not the calendar-current one.
+        .filter(Order.user_id == target_user.id, Order.week_start == menu_target_week_start())
         .order_by(Order.order_date, Order.item_name)
         .all()
     )
