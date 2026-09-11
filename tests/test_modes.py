@@ -34,17 +34,19 @@ class TestModesPage:
         assert response.headers["location"] == "/login"
 
 
-class TestModeOnePlaceholder:
-    """Mode 1's guided prompt is built in a later task. Until then the card
-    must still lead somewhere real -- a 404 would be a broken chooser."""
+class TestModeOneReachableFromChooser:
+    """Mode 1's card must lead somewhere real -- a 404 would be a broken
+    chooser. The route is now the guided prompt itself (its payload and empty
+    state are covered in test_weekly_prompt.py); these two only pin that the
+    chooser's link still resolves and stays gated."""
 
-    def test_weekly_placeholder_renders_for_logged_in_user(self, logged_in_client):
+    def test_weekly_route_renders_for_logged_in_user(self, logged_in_client):
         response = logged_in_client.get("/modes/weekly")
 
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
 
-    def test_weekly_placeholder_redirects_anonymous_to_login(self, client):
+    def test_weekly_route_redirects_anonymous_to_login(self, client):
         response = client.get("/modes/weekly")
 
         assert response.status_code == 303
