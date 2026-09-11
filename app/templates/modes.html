@@ -20,18 +20,29 @@
   </div>
 
   <main class="screen active modes-shell">
+    <p class="modes-eyebrow">Dobrý den, {{ user.username }}</p>
     <h1>Jak chcete objednávat?</h1>
-    <p>Vyberte si režim objednávání. Můžete se sem kdykoliv vrátit.</p>
+    <p class="modes-lede">Vyberte si režim objednávání. Můžete se sem kdykoliv vrátit
+       přes logo nebo odkaz „Výběr režimu“.</p>
 
     <ul class="modes-list">
-      <li class="mode-card">
-        <h2><a href="/modes/weekly">Týdenní objednávka</a></h2>
-        <p>Provede vás celým týdnem den po dni. U každého dne si vyberete
-           jídlo ze seznamu a můžete přidat poznámku.</p>
+      <li class="mode-card mode-card--primary">
+        <span class="mode-mark" aria-hidden="true">a)</span>
+        <h2>
+          <a href="/modes/weekly">Týdenní objednávka</a>
+          <span class="mode-badge">Doporučeno</span>
+        </h2>
+        <p>Celý týden na jedné stránce. U každého dne si vyberete jídlo
+           ze seznamu a můžete přidat poznámku.</p>
+        <p class="mode-meta">Nejrychlejší cesta, jak mít objednaný celý týden.</p>
+        <span class="mode-chev" aria-hidden="true">&rsaquo;</span>
       </li>
-      <li class="mode-card">
+      <li class="mode-card mode-card--secondary">
+        <span class="mode-mark" aria-hidden="true">b)</span>
         <h2><a href="/orders">Klasická objednávka</a></h2>
         <p>Známá tabulka s celým týdenním menu, kde si vybíráte sami.</p>
+        <p class="mode-meta">Beze změn — včetně přehledu a objednávky za kolegu.</p>
+        <span class="mode-chev" aria-hidden="true">&rsaquo;</span>
       </li>
     </ul>
   </main>
