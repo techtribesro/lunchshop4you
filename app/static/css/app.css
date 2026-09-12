@@ -1149,20 +1149,92 @@
 
   /* ---------- Small screens ---------- */
   @media (max-width: 760px) {
-    .topbar { padding: 12px 16px; gap: 10px 14px; flex-wrap: wrap; }
-    .wordmark .brand-logo { height: 24px; }
-    .view-nav button { padding: 8px 13px; font-size: 13px; }
-    .user-chip span.username { display: none; }
-    .send-out-btn {
-      order: 10;
-      flex: 1 1 100%;
-      width: 100%;
-      text-align: center;
-      margin-top: 4px;
-      border-radius: 10px;
-      padding: 12px 20px;
+    /* ONE LINE AT NARROW WIDTHS (t22).
+       This used to be `flex-wrap: wrap`, which stacked the bar into three
+       rows (logo / nav+chip / Odhlasit) at 390px -- and four for admins,
+       because .send-out-btn below claimed `flex: 1 1 100%`. Measured: 132px
+       of a 844px viewport for a normal user, 200px for an admin, pushing the
+       first dish to 288px / 356px. Every one of those pixels is chrome above
+       the content people actually came for.
+
+       Nothing is removed to achieve this: the logo shrinks, the nav scrolls
+       horizontally instead of wrapping, and the send-out button rejoins the
+       row. All controls stay present, named and focusable. */
+    .topbar {
+      padding: 10px 10px;
+      gap: 6px;
+      flex-wrap: nowrap;
+      /* Children may shrink below their content width; without this the
+         nav's intrinsic min-content size would force an overflow. */
+      min-width: 0;
+      /* The admin bar (logo + nav + send-out + avatar + Odhlasit) lands
+         within a few px of 390. Belt and braces so a slightly wider font
+         or a longer username can never push Odhlasit off the edge again. */
+      overflow-x: hidden;
     }
-    .link-btn { white-space: nowrap; }
+    .wordmark { min-width: 0; }
+    /* Pays for the nav's floor above: the mark stays recognisable (and keeps
+       t10's dark-theme backing chip) at a smaller size. */
+    .wordmark .brand-logo { height: 20px; }
+
+    /* ADMIN ONLY, NARROW ONLY. With the send-out button present there are
+       five competing controls and 390px cannot show them all: the active nav
+       pill clipped to "Objedn" and Odhlasit ran 6px off the right edge.
+       The logo is the only non-interactive item here, and its sole function
+       -- the link to /modes -- is duplicated by the "Vyber rezimu" nav entry
+       two pixels away, so hiding it costs no capability. Every CONTROL stays
+       on screen, whole. Non-admins keep the logo (they have room for it).
+       :has() is supported by every browser this app targets; if it were not,
+       the bar would simply keep today's behaviour. */
+    .topbar:has(.send-out-btn) .wordmark { display: none; }
+
+    /* The nav is the one part that can legitimately exceed the remaining
+       width (it holds up to four entries for an admin). Let it scroll
+       sideways rather than wrap the whole bar -- every entry stays a real,
+       focusable control and reachable by swipe or keyboard. */
+    .view-nav {
+      /* A floor, not zero: with `min-width: 0` the nav collapsed to a
+         truncated stub ("Vy...") on the admin bar, where .send-out-btn
+         competes for the same row. The bar still measured one line and the
+         ARIA name stayed intact, so only the pixels showed it. Keep enough
+         width for a real label and let the nav scroll within it. */
+      flex: 1 1 auto;
+      /* Wide enough that the ACTIVE pill ("Objednávka", ~95px) is always
+         shown whole. At 7rem the admin bar squeezed the scrollport to 110px
+         and the current view read as a clipped "Obje" sliver -- one line by
+         measurement, unusable by eye. */
+      min-width: 8.75rem;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .view-nav::-webkit-scrollbar { display: none; }
+    .view-nav button,
+    .view-nav a { white-space: nowrap; flex: none; }
+    .view-nav button { padding: 7px 11px; font-size: 12.5px; }
+
+    /* The avatar already carries identity, so the username text goes. */
+    .user-chip span.username { display: none; }
+    .user-chip { flex: none; }
+    .avatar { width: 26px; height: 26px; font-size: 11px; }
+
+    /* Back on the single row. At 390px the full "Odeslat objednávku" (145px)
+       plus the nav floor pushed the avatar and Odhlasit clean off the right
+       edge -- an admin could not log out on a phone. So the second word is
+       dropped VISUALLY only; aria-label on the button keeps the full
+       accessible name, so it is still "Odeslat objednávku" to a screen
+       reader. It stays a labelled text button, not a bare icon, because it
+       is destructive. */
+    .send-out-btn {
+      flex: none;
+      font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .send-out-btn .send-out-word { display: none; }
+    .link-btn { white-space: nowrap; flex: none; }
 
     .order-shell, .dash-shell { padding: 14px 12px 96px; }
 

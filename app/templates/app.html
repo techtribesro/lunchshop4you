@@ -118,7 +118,11 @@
       <button type="button" data-goto="dashboard">Přehled</button>
       {% if user.is_admin %}<button type="button" data-goto="admin">Admin</button>{% endif %}
     </nav>
-    {% if user.is_admin %}<button type="button" id="topbar-send-out" class="send-out-btn">Odeslat objednávku</button>{% endif %}
+    {# aria-label pins the full accessible name; the visible label is split so
+       narrow screens can drop the second word (see .send-out-btn in app.css).
+       Topbar region only -- t22. #}
+    {% if user.is_admin %}<button type="button" id="topbar-send-out" class="send-out-btn"
+            aria-label="Odeslat objednávku">Odeslat<span class="send-out-word"> objednávku</span></button>{% endif %}
     <div class="topbar-spacer"></div>
     <div class="user-chip">
       <div class="avatar" id="user-avatar"></div>
