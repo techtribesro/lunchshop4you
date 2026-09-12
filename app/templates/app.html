@@ -118,7 +118,11 @@
       <button type="button" data-goto="dashboard">Přehled</button>
       {% if user.is_admin %}<button type="button" data-goto="admin">Admin</button>{% endif %}
     </nav>
-    {% if user.is_admin %}<button type="button" id="topbar-send-out" class="send-out-btn">Odeslat objednávku</button>{% endif %}
+    {# aria-label pins the full accessible name; the visible label is split so
+       narrow screens can drop the second word (see .send-out-btn in app.css).
+       Topbar region only -- t22. #}
+    {% if user.is_admin %}<button type="button" id="topbar-send-out" class="send-out-btn"
+            aria-label="Odeslat objednávku">Odeslat<span class="send-out-word"> objednávku</span></button>{% endif %}
     <div class="topbar-spacer"></div>
     <div class="user-chip">
       <div class="avatar" id="user-avatar"></div>
@@ -149,6 +153,15 @@
            only way to actually edit + submit for another user. -->
       <div class="on-behalf-bar">
         <button type="button" id="on-behalf-start" class="chip-btn">Objednat za někoho jiného</button>
+        <!-- The read-only "Objednávám za" viewer (t7) keeps its semantics and
+             its #people-row container, but is demoted behind a disclosure: it
+             is irrelevant to the ~95% self-ordering case and previously cost a
+             permanent full-width row of chrome above every dish. It shares
+             this line with the on-behalf button rather than adding a row. -->
+        <details class="people-disclosure">
+          <summary class="people-summary">Objednávky kolegů</summary>
+          <div class="people-row" id="people-row"><!-- person pills injected by JS --></div>
+        </details>
         <div class="on-behalf-picker" id="on-behalf-picker" hidden>
           <label for="on-behalf-select">Za koho objednáváte?</label>
           <select id="on-behalf-select"><!-- options injected by JS --></select>
@@ -161,15 +174,20 @@
         <button type="button" id="on-behalf-exit" class="chip-btn">Zpět na moji objednávku</button>
       </div>
 
-      <div class="day-row" id="people-row"><!-- person pills injected by JS --></div>
-
-      <div class="day-row" id="day-row"><!-- day pills injected by JS --></div>
+      <!-- The read-only "Objednávám za" viewer (t7) keeps its semantics and
+           its #people-row container, but is demoted behind a disclosure: it
+           is irrelevant to the ~95% self-ordering case and previously cost a
+           permanent full-width row of chrome above every dish. -->
+      <div class="day-row" id="day-row" role="tablist" aria-label="Den v týdnu"><!-- day pills injected by JS --></div>
 
       <div class="order-grid">
         <div id="menu-list"><!-- category blocks injected by JS --></div>
 
         <aside class="summary-rail">
-          <h3 class="summary-title">Vaše objednávka</h3>
+          <h3 class="summary-title">
+            <span>Vaše objednávka</span>
+            <span class="summary-count" id="summary-count" hidden></span>
+          </h3>
           <div id="summary-body">
             <p class="summary-empty">Zatím nic nevybráno.</p>
           </div>
@@ -189,6 +207,7 @@
       <div class="mob-total-block">
         <div class="mob-total-label">Celkem</div>
         <div class="mob-total-amount tabular" id="summary-total-mobile">0 Kč</div>
+        <div class="mob-count" id="summary-count-mobile">Zatím nic nevybráno</div>
       </div>
       <button class="btn-primary" type="button" id="submit-order-mobile">Zaznamenat</button>
     </div>
@@ -459,7 +478,12 @@
         btn.className = "day-pill" + (day === TODAY ? " is-today" : "");
         btn.type = "button";
         if (day === selectedDay) btn.setAttribute("aria-current", "true");
-        btn.innerHTML = `<div class="d">${day.slice(0,2).toUpperCase()}</div><div class="n">${day}</div>`;
+        // The visible label shortens to a 2-letter code so five days fit a
+        // 390px viewport, so the FULL Czech day name is carried as the
+        // accessible name rather than being lost with the text.
+        btn.setAttribute("aria-label", day + (day === TODAY ? " (dnes)" : ""));
+        btn.innerHTML = `<span class="d">${day.slice(0,2).toUpperCase()}</span>` +
+          (day === selectedDay ? `<span class="n">${day}</span>` : "");
         btn.addEventListener("click", () => { selectedDay = day; renderDays(); renderMenu(); renderSummary(); updateSubmitState(); });
         row.appendChild(btn);
       });
@@ -506,7 +530,13 @@
           if (editable) {
             const stepper = document.createElement("div");
             stepper.className = "stepper";
-            stepper.innerHTML = `<button type="button" data-action="dec">−</button><span class="qty tabular">${qty}</span><button type="button" data-action="inc">+</button>`;
+            // The steppers previously exposed only "−" / "+" as their
+            // accessible names -- 20 identically-named buttons with no tie to
+            // the dish they change. Name them after the dish.
+            stepper.innerHTML =
+              `<button type="button" data-action="dec" aria-label="Odebrat: ${it.name}">−</button>` +
+              `<span class="qty tabular" aria-hidden="true">${qty}</span>` +
+              `<button type="button" data-action="inc" aria-label="Přidat: ${it.name}">+</button>`;
             stepper.querySelector('[data-action="inc"]').addEventListener("click", () => changeQty(it, 1));
             stepper.querySelector('[data-action="dec"]').addEventListener("click", () => changeQty(it, -1));
             itemRow.appendChild(stepper);
@@ -518,7 +548,7 @@
             const noteRow = document.createElement("div");
             noteRow.className = "note-row";
             const noteValue = cart[it.name]?.note || "";
-            noteRow.innerHTML = `<input type="text" class="note-input" placeholder="Poznámka (nepovinné) – např. bez cibule" value="${noteValue.replace(/"/g, "&quot;")}" />`;
+            noteRow.innerHTML = `<input type="text" class="note-input" aria-label="Poznámka k položce: ${it.name}" placeholder="Poznámka (nepovinné) – např. bez cibule" value="${noteValue.replace(/"/g, "&quot;")}" />`;
             noteRow.querySelector(".note-input").addEventListener("input", (e) => {
               if (cart[it.name]) { cart[it.name].note = e.target.value; renderSummary(); }
             });
@@ -567,6 +597,20 @@
       const total = entries.reduce((sum, e) => sum + e.price * e.qty, 0);
       totalEl.textContent = fmt(total);
       totalMobileEl.textContent = fmt(total);
+
+      // Running item count, in the rail header and in the mobile bar that
+      // replaces the rail at 390px -- it is what binds the summary to the
+      // list it summarises.
+      const pieces = entries.reduce((sum, e) => sum + e.qty, 0);
+      const countEl = document.getElementById("summary-count");
+      const countMobileEl = document.getElementById("summary-count-mobile");
+      if (countEl) {
+        countEl.hidden = pieces === 0;
+        countEl.textContent = itemsLabel(pieces);
+      }
+      if (countMobileEl) {
+        countMobileEl.textContent = pieces === 0 ? "Zatím nic nevybráno" : itemsLabel(pieces);
+      }
       const totalKcal = entries.reduce((sum, e) => sum + (e.kcal || 0) * e.qty, 0);
       totalKcalEl.textContent = totalKcal > 0 ? `≈ ${totalKcal.toLocaleString("cs-CZ")} kcal` : "";
     }

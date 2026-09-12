@@ -261,8 +261,11 @@ def login(context, base_url: str) -> None:
         page.goto(f"{base_url}/login", wait_until="domcontentloaded")
         page.fill("#u", SEED_USER)
         page.fill("#p", SEED_PASSWORD)
-        with page.expect_navigation(wait_until="domcontentloaded", timeout=15000):
-            page.click("button[type=submit]")
+        # login.html posts /login via fetch() and THEN assigns
+        # window.location.href = "/modes". There is no form navigation, so
+        # expect_navigation() has no event to catch and times out.
+        page.click("button[type=submit]")
+        page.wait_for_url("**/modes", timeout=15000)
         if "/login" in page.url:
             error = page.text_content("#login-error") or ""
             raise RuntimeError(f"Login failed, still on /login. Page error: {error.strip()!r}")

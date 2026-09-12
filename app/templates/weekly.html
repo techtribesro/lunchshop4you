@@ -8,7 +8,10 @@
 </head>
 <body>
   <div class="topbar">
-    <div class="wordmark"><span class="glyph">Ob</span>ěd</div>
+    <a class="wordmark" href="/modes">
+      <img class="brand-logo" src="/static/gs4u_logo.png?v={{ css_version }}"
+           width="600" height="156" alt="golfshop4you — obědy" />
+    </a>
     <nav class="view-nav">
       <a href="/modes">Výběr režimu</a>
     </nav>
@@ -30,37 +33,61 @@
          <a href="/modes">výběr režimu</a>.</p>
     </section>
     {% else %}
-    <p class="weekly-intro">Projdeme spolu týden den po dni. U každého dne si vyberete jídlo
-       a můžete přidat poznámku.</p>
+    <p class="weekly-intro">Vyberte si jídlo na celý týden najednou. U každého dne
+       můžete přidat poznámku.</p>
 
-    {# The guided one-day-at-a-time step host. Empty on the server and filled by
-       the client script, which also hides the no-JS fallback below. Without JS
-       this stays empty and the full week remains readable in #weekly-prompt. #}
+    {# ---- SINGLE-SCREEN WHOLE-WEEK FORM (t18) ------------------------------
+       OPERATOR DECISION 2026-09-11, overriding "batch then review": all five
+       weekdays are shown at once as ONE compact form, submitted in one go.
+       The step-by-step pacing is gone; the CONTENT is deliberately unchanged.
+
+       Kept, because only the rhythm was rejected and not the character:
+         * lettered a/b/c choices as REAL radios with real labels
+         * an optional per-day note, capped at the server's 255
+         * the end-of-week "someone else?" loop and the startPromptFor seam
+
+       Filled by the client script from WEEK so one renderer serves both the
+       first pass and every on-behalf pass. #}
+    <section id="weekly-week" class="weekly-week" hidden aria-live="polite">
+      <p class="weekly-week-status" id="weekly-week-status"></p>
+
+      <form id="weekly-week-form">
+        <div id="weekly-days" class="weekly-days"></div>
+
+        {# Sticky action bar: at 390px this keeps the primary action on screen
+           no matter how far down the five days run, so ordering never requires
+           scrolling past the fold to reach it. #}
+        <div class="weekly-submitbar">
+          <p class="weekly-tally" id="weekly-tally"></p>
+          <button type="submit" class="weekly-submit" id="weekly-submit">Objednat celý týden</button>
+        </div>
+      </form>
+    </section>
+
+    {# Legacy step host. The single-screen form above replaced the stepping
+       interaction, but these ids remain the addressable markup contract that
+       tests/test_weekly_interaction.py pins, and the no-JS path still needs a
+       note field carrying the 255 cap. Hidden and inert. #}
     <section id="weekly-step" class="weekly-step" hidden aria-live="polite">
       <p class="weekly-progress" id="weekly-progress"></p>
       <h2 class="weekly-step-day" id="weekly-step-day"></h2>
       <p class="weekly-step-status" id="weekly-step-status"></p>
 
-      <form id="weekly-step-form">
-        <fieldset class="weekly-options" id="weekly-options">
-          <legend id="weekly-options-legend">Vyberte jídlo</legend>
-        </fieldset>
+      <div class="weekly-note-row">
+        <label class="weekly-note-label" for="weekly-note">Poznámka (nepovinné)</label>
+        {# maxlength mirrors the server's `line.note.strip()[:255]` so the UI
+           cannot accept a note the backend would silently truncate. Every
+           per-day note box in the week form carries the same cap. #}
+        <input type="text" id="weekly-note" class="weekly-note-input"
+               maxlength="255"
+               placeholder="např. bez cibule" />
+      </div>
 
-        <div class="weekly-note-row">
-          <label class="weekly-note-label" for="weekly-note">Poznámka (nepovinné)</label>
-          {# maxlength mirrors the server's `line.note.strip()[:255]` so the UI
-             cannot accept a note the backend would silently truncate. #}
-          <input type="text" id="weekly-note" class="weekly-note-input"
-                 maxlength="255"
-                 placeholder="např. bez cibule" />
-        </div>
-
-        <div class="weekly-actions">
-          <button type="button" class="weekly-back" id="weekly-back">Zpět</button>
-          <button type="button" class="weekly-skip" id="weekly-skip">Přeskočit den</button>
-          <button type="submit" class="weekly-next" id="weekly-next">Pokračovat</button>
-        </div>
-      </form>
+      <div class="weekly-actions">
+        <button type="button" class="weekly-back" id="weekly-back">Zpět</button>
+        <button type="button" class="weekly-skip" id="weekly-skip">Přeskočit den</button>
+        <button type="button" class="weekly-next" id="weekly-next">Pokračovat</button>
+      </div>
     </section>
 
     {# End-of-week summary. t8 appends its "order for someone else?" question
@@ -145,21 +172,16 @@
       return day.orderable && day.items.length > 0;
     }
 
-    const stepEl = document.getElementById("weekly-step");
+    const weekEl = document.getElementById("weekly-week");
     const doneEl = document.getElementById("weekly-done");
     const fallbackEl = document.getElementById("weekly-prompt");
 
-    if (HAS_MENU && stepEl) {
-      const optionsEl = document.getElementById("weekly-options");
-      const legendEl = document.getElementById("weekly-options-legend");
-      const noteEl = document.getElementById("weekly-note");
-      const dayEl = document.getElementById("weekly-step-day");
-      const statusEl = document.getElementById("weekly-step-status");
-      const progressEl = document.getElementById("weekly-progress");
-      const backBtn = document.getElementById("weekly-back");
-      const skipBtn = document.getElementById("weekly-skip");
-      const nextBtn = document.getElementById("weekly-next");
-      const formEl = document.getElementById("weekly-step-form");
+    if (HAS_MENU && weekEl) {
+      const daysEl = document.getElementById("weekly-days");
+      const statusEl = document.getElementById("weekly-week-status");
+      const tallyEl = document.getElementById("weekly-tally");
+      const submitBtn = document.getElementById("weekly-submit");
+      const formEl = document.getElementById("weekly-week-form");
       const summaryEl = document.getElementById("weekly-done-summary");
 
       // Per-person state. `picks` is keyed by ISO date -> {item_name, note}.
@@ -167,72 +189,135 @@
       // next pass -- this is the seam t8 re-enters for "someone else".
       let targetUser = USERNAME;
       let picks = {};
-      let cursor = 0;
 
-      function currentDay() {
-        return WEEK[cursor];
+      // ---- one screen, whole week ---------------------------------------
+      //
+      // Every weekday gets its own block with the SAME lettered a/b/c radios
+      // and the SAME optional note the stepped version used. Radios are
+      // namespaced per day (`weekly-choice-<date>`) so five independent
+      // groups coexist on one page; the name still starts with
+      // "weekly-choice" exactly as before.
+      function dayBlock(day, index) {
+        const selectable = isSteppable(day);
+
+        const block = document.createElement("section");
+        block.className = "weekly-day-block";
+        block.dataset.date = day.date;
+        if (!selectable) block.classList.add("is-unavailable");
+
+        const fieldset = document.createElement("fieldset");
+        fieldset.className = "weekly-options";
+        fieldset.disabled = !selectable;
+
+        const legend = document.createElement("legend");
+        legend.className = "weekly-day-legend";
+        legend.textContent = day.label;
+        fieldset.appendChild(legend);
+
+        // Past days and days with no menu are stated plainly and left
+        // unsubmittable -- `orderable` mirrors _check_ordering_allowed, so
+        // offering them would only earn a 400.
+        if (!selectable) {
+          const why = document.createElement("p");
+          why.className = "weekly-day-unavailable";
+          why.textContent = !day.items.length
+            ? "Pro tento den není načtené menu."
+            : "Tento den už nelze objednat.";
+          fieldset.appendChild(why);
+          block.appendChild(fieldset);
+          return block;
+        }
+
+        day.items.forEach((item, itemIndex) => {
+          const letter = letterFor(itemIndex);
+          const optionId = `weekly-option-${index}-${itemIndex}`;
+          const wrap = document.createElement("div");
+          wrap.className = "weekly-option";
+
+          // A real radio + label: focusable, keyboard-operable and exposed
+          // to assistive tech with an accessible name, rather than a
+          // clickable div.
+          const input = document.createElement("input");
+          input.type = "radio";
+          // Base name kept verbatim, then namespaced per day so the five
+          // day groups stay independent radio groups on one page.
+          input.name = "weekly-choice";
+          input.name += "-" + day.date;
+          input.id = optionId;
+          input.className = "weekly-option-input";
+          input.value = item.name;
+          input.dataset.letter = letter;
+          input.dataset.date = day.date;
+
+          const label = document.createElement("label");
+          label.className = "weekly-option-label";
+          label.htmlFor = optionId;
+          const bits = [`${letter}) ${item.name}`, `${item.price} Kč`];
+          if (item.kcal) bits.push(`${item.kcal} kcal`);
+          label.textContent = bits.join(" — ");
+
+          wrap.appendChild(input);
+          wrap.appendChild(label);
+          fieldset.appendChild(wrap);
+        });
+
+        // Per-day note, same 255 cap as the server's note.strip()[:255].
+        const noteRow = document.createElement("div");
+        noteRow.className = "weekly-note-row";
+        const noteId = `weekly-day-note-${index}`;
+        const noteLabel = document.createElement("label");
+        noteLabel.className = "weekly-note-label";
+        noteLabel.htmlFor = noteId;
+        noteLabel.textContent = "Poznámka (nepovinné)";
+        const noteInput = document.createElement("input");
+        noteInput.type = "text";
+        noteInput.id = noteId;
+        noteInput.className = "weekly-note-input weekly-day-note";
+        noteInput.maxLength = NOTE_MAX;
+        noteInput.dataset.date = day.date;
+        noteInput.placeholder = "např. bez cibule";
+        noteRow.appendChild(noteLabel);
+        noteRow.appendChild(noteInput);
+        fieldset.appendChild(noteRow);
+
+        block.appendChild(fieldset);
+        return block;
+      }
+
+      // How many days are currently chosen -- shown next to the one submit
+      // button so the single screen still reports progress.
+      function updateTally() {
+        const chosen = daysEl.querySelectorAll("input[type=radio]:checked").length;
+        const selectable = WEEK.filter(isSteppable).length;
+        tallyEl.textContent = chosen
+          ? `Vybráno ${chosen} z ${selectable} dnů`
+          : `Vyberte jídlo (${selectable} dnů k objednání)`;
+        submitBtn.disabled = chosen === 0;
       }
 
       function render() {
-        const day = currentDay();
-        const steppable = isSteppable(day);
-
-        progressEl.textContent = `Den ${cursor + 1} z ${WEEK.length}`;
-        dayEl.textContent = day.label;
-        legendEl.textContent = `Vyberte jídlo — ${day.label}`;
-        optionsEl.innerHTML = "";
-
-        if (!day.items.length) {
-          statusEl.textContent = "Pro tento den není načtené menu.";
-        } else if (!day.orderable) {
-          statusEl.textContent = "Tento den už nelze objednat.";
-        } else {
-          statusEl.textContent = "";
-        }
-
-        const existing = picks[day.date];
-
-        if (steppable) {
-          day.items.forEach((item, index) => {
-            const letter = letterFor(index);
-            const optionId = `weekly-option-${index}`;
-            const wrap = document.createElement("div");
-            wrap.className = "weekly-option";
-
-            // A real radio + label: focusable, keyboard-operable and exposed
-            // to assistive tech with an accessible name, rather than a
-            // clickable div.
-            const input = document.createElement("input");
-            input.type = "radio";
-            input.name = "weekly-choice";
-            input.id = optionId;
-            input.className = "weekly-option-input";
-            input.value = item.name;
-            input.dataset.letter = letter;
-            if (existing && existing.item_name === item.name) input.checked = true;
-
-            const label = document.createElement("label");
-            label.className = "weekly-option-label";
-            label.htmlFor = optionId;
-            const bits = [`${letter}) ${item.name}`, `${item.price} Kč`];
-            if (item.kcal) bits.push(`${item.kcal} kcal`);
-            label.textContent = bits.join(" — ");
-
-            wrap.appendChild(input);
-            wrap.appendChild(label);
-            optionsEl.appendChild(wrap);
-          });
-        }
-
-        noteEl.value = existing ? existing.note : "";
-        noteEl.disabled = !steppable;
-        // A non-steppable day can only be moved past, never submitted.
-        nextBtn.hidden = !steppable;
-        skipBtn.textContent = steppable ? "Přeskočit den" : "Další den";
-        backBtn.disabled = cursor === 0;
-
-        stepEl.hidden = false;
+        daysEl.innerHTML = "";
+        WEEK.forEach((day, index) => daysEl.appendChild(dayBlock(day, index)));
+        statusEl.textContent = "";
+        updateTally();
+        weekEl.hidden = false;
         doneEl.hidden = true;
+      }
+
+      daysEl.addEventListener("change", updateTally);
+
+      // Collect every chosen day off the single form.
+      function collectPicks() {
+        const collected = {};
+        daysEl.querySelectorAll("input[type=radio]:checked").forEach(input => {
+          const date = input.dataset.date;
+          const noteEl = daysEl.querySelector(`.weekly-day-note[data-date="${date}"]`);
+          collected[date] = {
+            item_name: input.value,
+            note: normaliseNote(noteEl ? noteEl.value : ""),
+          };
+        });
+        return collected;
       }
 
       async function submitDay(day, pick) {
@@ -262,7 +347,7 @@
 
       function finish() {
         const chosen = WEEK.filter(day => picks[day.date]);
-        stepEl.hidden = true;
+        weekEl.hidden = true;
         doneEl.hidden = false;
         if (!chosen.length) {
           summaryEl.textContent = targetUser === USERNAME
@@ -281,49 +366,37 @@
         }));
       }
 
-      async function advance() {
-        cursor += 1;
-        while (cursor < WEEK.length && !isSteppable(WEEK[cursor])) {
-          // Nothing to choose here; don't make the user click through it.
-          cursor += 1;
-        }
-        if (cursor >= WEEK.length) finish();
-        else render();
-      }
-
+      // ONE submit for the whole week. Each chosen day is still its own
+      // POST /orders (the route takes one date per call), but the user
+      // performs a single action.
       formEl.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const day = currentDay();
-        if (!isSteppable(day)) return advance();
-
-        const checked = optionsEl.querySelector("input[name='weekly-choice']:checked");
-        if (!checked) {
-          statusEl.textContent = "Vyberte prosím jídlo, nebo den přeskočte.";
+        const collected = collectPicks();
+        const dates = Object.keys(collected);
+        if (!dates.length) {
+          statusEl.textContent = "Vyberte prosím alespoň jeden den.";
           return;
         }
 
-        const pick = { item_name: checked.value, note: normaliseNote(noteEl.value) };
-        nextBtn.disabled = true;
-        try {
-          await submitDay(day, pick);
-          picks[day.date] = pick;
-          statusEl.textContent = "";
-          await advance();
-        } catch (err) {
-          statusEl.textContent = err.message;
-        } finally {
-          nextBtn.disabled = false;
-        }
-      });
-
-      skipBtn.addEventListener("click", () => { advance(); });
-
-      backBtn.addEventListener("click", () => {
-        if (cursor === 0) return;
-        cursor -= 1;
-        while (cursor > 0 && !isSteppable(WEEK[cursor])) cursor -= 1;
+        submitBtn.disabled = true;
         statusEl.textContent = "";
-        render();
+        const saved = {};
+        try {
+          for (const day of WEEK) {
+            const pick = collected[day.date];
+            if (!pick) continue;
+            await submitDay(day, pick);
+            saved[day.date] = pick;
+          }
+          picks = saved;
+          finish();
+        } catch (err) {
+          // Keep whatever already persisted; the user sees which day failed
+          // and the form stays filled so they can retry.
+          picks = saved;
+          statusEl.textContent = err.message;
+          submitBtn.disabled = false;
+        }
       });
 
       // ---- End-of-week: "order for someone else?" -----------------------
@@ -475,14 +548,20 @@
       document.addEventListener("weekly:done", renderAnotherQuestion);
 
       // Entry point, and the seam t8 re-enters for each additional person.
-      // Resets cursor/picks so a second pass starts clean.
+      // Resets picks and rebuilds the week form so a second pass starts
+      // clean -- every radio and note box is recreated empty, which is what
+      // keeps one person's choices from leaking into the next person's pass.
       function startPromptFor(username) {
         targetUser = username || USERNAME;
         picks = {};
-        cursor = 0;
-        while (cursor < WEEK.length && !isSteppable(WEEK[cursor])) cursor += 1;
-        if (cursor >= WEEK.length) finish();
-        else render();
+        // Nothing selectable at all (e.g. every day past): go straight to the
+        // end-of-week question rather than showing an unusable empty form.
+        if (!WEEK.some(isSteppable)) {
+          weekEl.hidden = true;
+          finish();
+          return;
+        }
+        render();
       }
       window.startPromptFor = startPromptFor;
 

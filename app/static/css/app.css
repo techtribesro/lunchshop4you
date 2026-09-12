@@ -488,60 +488,170 @@
     padding: 24px 28px 80px;
   }
 
+  /* ---- Day selector: ONE line, five equal columns, fits 390px ----
+     Was two stacked full-width scrolling pill rows (people + days) whose
+     78px-min two-line boxes overflowed at 390px, clipping ČT and pushing PÁ
+     entirely off-screen. Now a 5-column grid that cannot overflow: each
+     column is 1fr of the container, so the row is exactly as wide as the
+     shell at every viewport. The full Czech day name is shown only for the
+     SELECTED day (and only where there is room), which is what made the
+     two-line pill so tall. .is-today dot and aria-current are preserved --
+     t13's sweep asserts day selection. */
   .day-row {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    margin-bottom: 22px;
-    -webkit-mask-image: linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent);
-    mask-image: linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent);
-  }
-  .day-pill {
-    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-bottom: 18px;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 12px;
-    padding: 9px 18px;
-    text-align: center;
-    min-width: 78px;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
+    padding: 4px;
   }
-  .day-pill:hover { border-color: var(--ink-faint); }
-  .day-pill[aria-current="true"]:hover { border-color: var(--accent-strong); }
-  .day-pill .d { font-size: 12.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  .day-pill .n { font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; margin-top: 2px; }
+  .day-pill {
+    position: relative;
+    min-width: 0;            /* allow the grid track to shrink below content */
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 7px 4px;
+    text-align: center;
+    overflow: hidden;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  }
+  .day-pill:hover { background: var(--line-soft); }
+  .day-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .day-pill .d {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+  }
+  /* The long name is secondary: it never dictates the control's width. */
+  .day-pill .n {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-faint);
+    line-height: 1.25;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .day-pill[aria-current="true"] {
     background: var(--accent);
     border-color: var(--accent);
   }
   .day-pill[aria-current="true"] .d,
   .day-pill[aria-current="true"] .n { color: var(--on-accent); }
-  .day-pill.is-today::after {
+  .day-pill.is-today .d::after {
     content: "";
-    display: block;
+    display: inline-block;
     width: 5px;
     height: 5px;
     border-radius: 50%;
     background: var(--warn);
-    margin: 5px auto 0;
+    margin-left: 4px;
+    vertical-align: middle;
   }
-  .day-pill[aria-current="true"].is-today::after { background: var(--on-accent); }
+  .day-pill[aria-current="true"].is-today .d::after { background: var(--on-accent); }
 
+  /* ---- "Objednávám za" read-only viewer, DEMOTED ----
+     t7 built this deliberately and t13 regression-tests the grid, so the
+     control and its semantics stay. But it is irrelevant to the ~95% case
+     (ordering for yourself), and as a permanent full-width pill row it cost
+     the same vertical space as the day selector. It is now a collapsed
+     disclosure that opens on demand. */
+  /* Shares the .on-behalf-bar line rather than occupying a row of its own. */
+  .people-disclosure {
+    position: relative;
+  }
+  /* Opened, the pill list floats over the content instead of pushing every
+     dish further down the page. */
+  .people-disclosure[open] .people-row {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 220px;
+    background: var(--surface-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 10px;
+    margin-top: 0;
+  }
+  .people-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    padding: 5px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-raised);
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .people-summary::-webkit-details-marker { display: none; }
+  .people-summary:hover { border-color: var(--ink-faint); color: var(--ink); }
+  .people-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .people-summary::after {
+    content: "▾";
+    font-size: 10px;
+    transition: transform 0.15s ease;
+  }
+  .people-disclosure[open] .people-summary::after { transform: rotate(180deg); }
+  .people-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .people-row .day-pill {
+    flex: 0 0 auto;
+    min-width: 0;
+    background: var(--surface);
+    border-color: var(--line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+  }
+  .people-row .day-pill[aria-current="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+
+  /* ---- List + summary as ONE bound container ----
+     The rail used to be a detached 320px card floating in whitespace beside
+     the list, connected to nothing. It is now the right-hand column of a
+     shared bordered surface with a single dividing rule between the two, so
+     the total reads as belonging to the list it summarises. */
   .order-grid {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 28px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: stretch;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
   }
+  #menu-list { padding: 6px 0 10px; min-width: 0; }
 
-  .category-block { margin-bottom: 28px; }
+  .category-block { margin-bottom: 6px; }
   .category-title {
-    font-size: 12.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    font-weight: 700;
     color: var(--ink-muted);
-    margin-bottom: 10px;
+    padding: 12px 18px 6px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -553,49 +663,60 @@
     background: var(--line-soft);
   }
 
+  /* ---- Dense dish rows (was a ~130px bordered card per dish) ----
+     One dish is now a single ~56-64px row: name, price and kcal on one
+     line with the stepper pulled in beside them rather than marooned at the
+     far right. Rows are separated by a hairline instead of each being its
+     own box, so a category reads as a list. */
   .item-card {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    display: block;
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--line-soft);
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    transition: background-color 0.15s ease;
   }
-  .item-card:not(.is-readonly):hover {
-    border-color: var(--ink-faint);
-    box-shadow: 0 2px 10px -6px rgba(34, 38, 31, 0.25);
-  }
+  .category-block .item-card:first-of-type { border-top: 0; }
+  .item-card:not(.is-readonly):hover { background: var(--line-soft); }
   .item-card.is-selected {
-    border-color: var(--accent);
     background: var(--accent-tint);
+    box-shadow: inset 3px 0 0 0 var(--accent);
   }
-  .item-card.is-selected:hover { border-color: var(--accent-strong); }
   .item-row {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
+    padding: 10px 18px;
+    min-height: 56px;
   }
-  .item-main { flex: 1; min-width: 0; }
+  .item-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+  }
   .item-name { font-weight: 600; font-size: 14.5px; }
   .item-price {
-    margin-left: 8px;
-    color: var(--ink-muted);
-    font-weight: 500;
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 13.5px;
   }
   .item-kcal {
-    margin-left: 8px;
     color: var(--ink-faint);
     font-size: 12px;
     font-weight: 500;
   }
   .item-kcal::before { content: "· "; }
+  /* The description is supporting detail: it shares the row rather than
+     adding a third line of height. */
   .item-desc {
+    flex: 1 0 100%;
     color: var(--ink-muted);
-    font-size: 13px;
-    margin-top: 3px;
+    font-size: 12.5px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -633,7 +754,7 @@
   .item-card.is-selected .stepper .qty { color: var(--accent-strong); }
 
   .note-row { display: none; }
-  .item-card.is-selected .note-row { display: block; }
+  .item-card.is-selected .note-row { display: block; padding: 0 18px 10px; }
   .note-input {
     width: 100%;
     font: inherit;
@@ -654,17 +775,38 @@
     margin-top: 2px;
   }
 
-  /* ---------- Order summary rail ---------- */
+  /* ---------- Order summary rail ----------
+     No longer a floating card: it is the right column of .order-grid,
+     joined to the list by a shared border rather than separated by a gap. */
   .summary-rail {
     position: sticky;
     top: 100px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 20px;
-    box-shadow: var(--shadow);
+    align-self: start;
+    background: var(--surface-raised);
+    border: 0;
+    border-left: 1px solid var(--line);
+    border-radius: 0;
+    padding: 18px;
+    box-shadow: none;
   }
-  .summary-title { font-size: 15px; margin-bottom: 12px; }
+  .summary-title {
+    font-size: 14px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  /* A running item count makes the rail visibly *of* the list above it. */
+  .summary-count {
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    background: var(--line-soft);
+    border-radius: 999px;
+    padding: 2px 9px;
+  }
   .summary-empty {
     font-size: 13px;
     color: var(--ink-faint);
@@ -818,55 +960,163 @@
 
   /* ---------- Mode chooser (/modes) ---------- */
   /* Mirrors the .order-shell container convention rather than inventing a
-     second page-shell system. */
+     second page-shell system. Narrower than .order-shell on purpose: this
+     page holds two choices, not a week of data, so a full 1080px measure
+     left the cards stranded in whitespace (see evidence/t10). */
   .modes-shell {
-    max-width: 1080px;
+    max-width: 900px;
     margin: 0 auto;
-    padding: 32px 28px 80px;
+    padding: 56px 28px 80px;
   }
-  .modes-shell h1 { font-size: 26px; }
-  .modes-shell > p {
+  /* Sense of arrival: an eyebrow + larger title, echoing the .weekly-progress
+     eyebrow on the prompt screen (t11) rather than a second label system. */
+  .modes-eyebrow {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--ink-muted);
-    margin: 8px 0 28px;
+    margin: 0 0 6px;
+  }
+  .modes-shell h1 {
+    font-size: 32px;
+    margin: 0 0 6px;
+  }
+  .modes-lede {
+    color: var(--ink-muted);
+    margin: 0 0 32px;
+    font-size: 15.5px;
+    max-width: 54ch;
   }
   .modes-list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 18px;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    /* Single column by default: the two modes are a ranked choice, read top
+       to bottom, not a pair of equivalent tiles side by side. */
+    grid-template-columns: 1fr;
   }
   .mode-card {
     position: relative;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 24px 24px 26px;
+    border-radius: 16px;
+    padding: 22px 24px;
     box-shadow: var(--shadow);
-    transition: border-color 0.15s ease, transform 0.1s ease;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "icon head  chev"
+      "icon body  chev"
+      "icon meta  chev";
+    column-gap: 18px;
+    align-items: start;
+    transition: border-color 0.15s ease, transform 0.1s ease,
+                box-shadow 0.15s ease;
   }
-  .mode-card h2 {
+
+  /* The recommended path carries primary weight: accent border, tinted
+     ground and a filled mark. The fallback stays quiet and secondary, so the
+     two cards no longer read as one repeated box. */
+  .mode-card--primary {
+    border-color: var(--accent-strong);
+    background: var(--surface);
+    box-shadow: var(--shadow), inset 0 0 0 1px var(--accent-strong);
+  }
+  .mode-card--secondary .mode-mark {
+    background: var(--surface-raised);
+    color: var(--ink-muted);
+    border: 1px solid var(--line);
+  }
+
+  .mode-mark {
+    grid-area: icon;
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: "Fraunces", ui-serif, Georgia, serif;
     font-size: 19px;
-    margin: 0 0 8px;
+    font-weight: 600;
+    flex: none;
+  }
+
+  .mode-card h2 {
+    grid-area: head;
+    font-size: 20px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
   }
   /* The <a> stays the real focusable, named control; the pseudo-element just
-     extends its hit area over the whole card. */
+     extends its hit area over the whole card, so the card is tappable without
+     turning a div into a fake button. */
   .mode-card h2 a {
     text-decoration: none;
-    color: var(--accent);
+    color: var(--ink);
   }
   .mode-card h2 a::after {
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: 14px;
+    border-radius: 16px;
   }
-  .mode-card p {
-    margin: 0;
+  /* :not(.mode-meta) matters -- .mode-meta is also a <p> inside .mode-card,
+     and a bare `.mode-card p { grid-area: body }` outranks `.mode-meta`
+     (0,0,1,1 vs 0,0,1,0), dropping BOTH paragraphs into the same grid cell
+     so they render stacked on top of each other. */
+  .mode-card p:not(.mode-meta) {
+    grid-area: body;
+    margin: 4px 0 0;
     color: var(--ink-muted);
     font-size: 14.5px;
   }
+
+  /* Small supporting fact per mode, so each card says something the other
+     does not. */
+  .mode-card p.mode-meta {
+    grid-area: meta;
+    margin: 10px 0 0;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mode-badge {
+    font-family: ui-sans-serif, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    border-radius: 999px;
+    padding: 3px 9px;
+  }
+
+  /* Affordance that the card leads somewhere. Decorative only -- the
+     accessible name lives in the link text. */
+  .mode-chev {
+    grid-area: chev;
+    color: var(--ink-faint);
+    font-size: 20px;
+    line-height: 1;
+    transition: transform 0.15s ease, color 0.15s ease;
+  }
+  .mode-card:hover .mode-chev,
+  .mode-card:has(a:focus-visible) .mode-chev {
+    color: var(--accent-strong);
+    transform: translateX(3px);
+  }
+
   .mode-card:hover {
     border-color: var(--accent-strong);
     transform: translateY(-1px);
@@ -878,9 +1128,20 @@
   .mode-card h2 a:focus-visible { outline: none; }
 
   @media (max-width: 760px) {
-    .modes-shell { padding: 24px 16px 64px; }
-    .modes-shell h1 { font-size: 22px; }
-    .modes-list { grid-template-columns: 1fr; }
+    .modes-shell { padding: 28px 16px 64px; }
+    .modes-shell h1 { font-size: 25px; }
+    .modes-lede { margin-bottom: 22px; font-size: 15px; }
+    .modes-list { grid-template-columns: 1fr; gap: 14px; }
+    /* Comfortable thumb target at 390px: the whole card is the hit area and
+       stays well above the 44px minimum. */
+    .mode-card {
+      padding: 18px 16px;
+      column-gap: 14px;
+      min-height: 96px;
+    }
+    .mode-mark { width: 40px; height: 40px; font-size: 17px; }
+    .mode-card h2 { font-size: 18px; }
+    .mode-chev { display: none; }
   }
 
   /* ---------- Mobile bottom action bar (order screen only) ---------- */
@@ -888,33 +1149,118 @@
 
   /* ---------- Small screens ---------- */
   @media (max-width: 760px) {
-    .topbar { padding: 12px 16px; gap: 10px 14px; flex-wrap: wrap; }
-    .wordmark .brand-logo { height: 24px; }
-    .view-nav button { padding: 8px 13px; font-size: 13px; }
-    .user-chip span.username { display: none; }
-    .send-out-btn {
-      order: 10;
-      flex: 1 1 100%;
-      width: 100%;
-      text-align: center;
-      margin-top: 4px;
-      border-radius: 10px;
-      padding: 12px 20px;
+    /* ONE LINE AT NARROW WIDTHS (t22).
+       This used to be `flex-wrap: wrap`, which stacked the bar into three
+       rows (logo / nav+chip / Odhlasit) at 390px -- and four for admins,
+       because .send-out-btn below claimed `flex: 1 1 100%`. Measured: 132px
+       of a 844px viewport for a normal user, 200px for an admin, pushing the
+       first dish to 288px / 356px. Every one of those pixels is chrome above
+       the content people actually came for.
+
+       Nothing is removed to achieve this: the logo shrinks, the nav scrolls
+       horizontally instead of wrapping, and the send-out button rejoins the
+       row. All controls stay present, named and focusable. */
+    .topbar {
+      padding: 10px 10px;
+      gap: 6px;
+      flex-wrap: nowrap;
+      /* Children may shrink below their content width; without this the
+         nav's intrinsic min-content size would force an overflow. */
+      min-width: 0;
+      /* The admin bar (logo + nav + send-out + avatar + Odhlasit) lands
+         within a few px of 390. Belt and braces so a slightly wider font
+         or a longer username can never push Odhlasit off the edge again. */
+      overflow-x: hidden;
     }
-    .link-btn { white-space: nowrap; }
+    .wordmark { min-width: 0; }
+    /* Pays for the nav's floor above: the mark stays recognisable (and keeps
+       t10's dark-theme backing chip) at a smaller size. */
+    .wordmark .brand-logo { height: 20px; }
 
-    .order-shell, .dash-shell { padding: 18px 16px 100px; }
+    /* ADMIN ONLY, NARROW ONLY. With the send-out button present there are
+       five competing controls and 390px cannot show them all: the active nav
+       pill clipped to "Objedn" and Odhlasit ran 6px off the right edge.
+       The logo is the only non-interactive item here, and its sole function
+       -- the link to /modes -- is duplicated by the "Vyber rezimu" nav entry
+       two pixels away, so hiding it costs no capability. Every CONTROL stays
+       on screen, whole. Non-admins keep the logo (they have room for it).
+       :has() is supported by every browser this app targets; if it were not,
+       the bar would simply keep today's behaviour. */
+    .topbar:has(.send-out-btn) .wordmark { display: none; }
 
-    .order-grid { grid-template-columns: 1fr; gap: 20px; }
+    /* The nav is the one part that can legitimately exceed the remaining
+       width (it holds up to four entries for an admin). Let it scroll
+       sideways rather than wrap the whole bar -- every entry stays a real,
+       focusable control and reachable by swipe or keyboard. */
+    .view-nav {
+      /* A floor, not zero: with `min-width: 0` the nav collapsed to a
+         truncated stub ("Vy...") on the admin bar, where .send-out-btn
+         competes for the same row. The bar still measured one line and the
+         ARIA name stayed intact, so only the pixels showed it. Keep enough
+         width for a real label and let the nav scroll within it. */
+      flex: 1 1 auto;
+      /* Wide enough that the ACTIVE pill ("Objednávka", ~95px) is always
+         shown whole. At 7rem the admin bar squeezed the scrollport to 110px
+         and the current view read as a clipped "Obje" sliver -- one line by
+         measurement, unusable by eye. */
+      min-width: 8.75rem;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .view-nav::-webkit-scrollbar { display: none; }
+    .view-nav button,
+    .view-nav a { white-space: nowrap; flex: none; }
+    .view-nav button { padding: 7px 11px; font-size: 12.5px; }
+
+    /* The avatar already carries identity, so the username text goes. */
+    .user-chip span.username { display: none; }
+    .user-chip { flex: none; }
+    .avatar { width: 26px; height: 26px; font-size: 11px; }
+
+    /* Back on the single row. At 390px the full "Odeslat objednávku" (145px)
+       plus the nav floor pushed the avatar and Odhlasit clean off the right
+       edge -- an admin could not log out on a phone. So the second word is
+       dropped VISUALLY only; aria-label on the button keeps the full
+       accessible name, so it is still "Odeslat objednávku" to a screen
+       reader. It stays a labelled text button, not a bare icon, because it
+       is destructive. */
+    .send-out-btn {
+      flex: none;
+      font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .send-out-btn .send-out-word { display: none; }
+    .link-btn { white-space: nowrap; flex: none; }
+
+    .order-shell, .dash-shell { padding: 14px 12px 96px; }
+
+    .order-grid { grid-template-columns: 1fr; }
     .summary-rail {
       position: static;
       display: none; /* the mobile action bar below replaces this panel */
     }
 
-    .item-desc { white-space: normal; overflow: visible; text-overflow: clip; }
+    /* Keep dishes to one compact row on a phone: the description is the
+       first thing to go, so more of the week fits above the fold. */
+    .item-desc { display: none; }
+    .item-row { padding: 9px 14px; min-height: 54px; gap: 10px; }
+    .category-title { padding: 10px 14px 5px; }
+    .item-card.is-selected .note-row { padding: 0 14px 9px; }
 
-    .stepper button { width: 38px; height: 38px; font-size: 17px; }
-    .stepper .qty { width: 34px; }
+    .day-row { gap: 4px; padding: 3px; margin-bottom: 10px; }
+    .day-pill { padding: 5px 2px; }
+    .day-pill .d { font-size: 12.5px; }
+    .day-pill .n { font-size: 10px; }
+    /* Every pixel above the first dish is chrome on a phone. */
+    .on-behalf-bar { margin-bottom: 10px; gap: 8px; }
+    .category-block:first-of-type .category-title { padding-top: 6px; }
+
+    .stepper button { width: 36px; height: 36px; font-size: 17px; }
+    .stepper .qty { width: 30px; }
 
     .stat-row { grid-template-columns: repeat(2, 1fr); }
 
@@ -941,6 +1287,13 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--ink-muted);
+    }
+    /* The bar replaces the rail on a phone, so it has to carry the same
+       information the rail did: how many items, not just the amount. */
+    .mobile-actionbar .mob-count {
+      font-size: 11.5px;
+      color: var(--ink-muted);
+      font-weight: 600;
     }
     .mobile-actionbar .mob-total-amount {
       font-family: "Fraunces", serif;
@@ -1163,6 +1516,126 @@
   .weekly-next:disabled { opacity: 0.6; cursor: progress; }
   .weekly-next:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .weekly-next[hidden] { display: none; }
+
+  /* ---------- Mode 1: SINGLE-SCREEN whole-week form (t18) ----------
+     The operator replaced the five-step pacing with one screen showing the
+     whole week. The CONTENT is unchanged -- lettered a/b/c radios plus an
+     optional per-day note -- so this reuses the .weekly-option / .weekly-note
+     rules above verbatim and only adds the week-level scaffolding.
+
+     The hard constraint this layout solves: at 390px five days of options
+     are far taller than the viewport, so the primary action cannot live at
+     the end of the list. It is pinned in a sticky bar instead, which keeps
+     "Objednat celý týden" on screen at every scroll position -- the
+     above-the-fold quality bar t11 set, preserved while showing 5x as much.
+     -------------------------------------------------------------------- */
+  .weekly-week[hidden] { display: none; }
+
+  .weekly-week-status {
+    margin: 0 0 14px;
+    font-size: 13.5px;
+    color: var(--critical);
+  }
+  .weekly-week-status:empty { display: none; }
+  .weekly-week-status:not(:empty) {
+    background: var(--critical-tint);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+
+  .weekly-days {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* One card per weekday: same bordered-card language as .weekly-step, but
+     tighter, because five of them share the screen. */
+  .weekly-day-block {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+  }
+  .weekly-day-block .weekly-options {
+    border: none;
+    margin: 0;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  /* The day name IS the group's accessible name (fieldset > legend), so the
+     ARIA tree still reads "group: Pondělí" per day. */
+  /* Scoped to beat `.weekly-options legend` (0,1,1) above, which would
+     otherwise force these day names to ALL-CAPS. The weekday is a proper
+     noun here, not a section eyebrow. */
+  .weekly-options legend.weekly-day-legend {
+    padding: 0;
+    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--ink);
+    margin-bottom: 4px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .weekly-day-block .weekly-option-label {
+    padding: 11px 14px 11px 42px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+  .weekly-day-block .weekly-option-input { margin: 13px 0 0 14px; }
+  .weekly-day-block .weekly-note-row { margin-top: 12px; }
+
+  /* Past days / days with no menu: visibly inert and unsubmittable. The
+     fieldset is `disabled`, so this is a real interaction state, not paint. */
+  .weekly-day-block.is-unavailable {
+    background: var(--line-soft);
+    box-shadow: none;
+  }
+  .weekly-day-block.is-unavailable .weekly-day-legend { color: var(--ink-muted); }
+  .weekly-day-unavailable {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+  }
+
+  /* ---- sticky submit bar ---- */
+  .weekly-submitbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 14px 0 12px;
+    background: linear-gradient(to bottom, transparent, var(--paper) 22%);
+  }
+  .weekly-tally {
+    margin: 0;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+  }
+  .weekly-submit {
+    margin-left: auto;
+    background: var(--accent);
+    color: var(--on-accent);
+    border: none;
+    border-radius: 999px;
+    padding: 13px 28px;
+    font-weight: 600;
+    font-size: 15px;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+  .weekly-submit:hover:not(:disabled) { background: var(--accent-strong); }
+  .weekly-submit:active:not(:disabled) { transform: translateY(1px); }
+  .weekly-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .weekly-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ---- end-of-week + empty states ---- */
   .weekly-done-summary {
