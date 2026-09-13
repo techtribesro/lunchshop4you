@@ -6,9 +6,8 @@
   <title>Oběd</title>
   <link rel="stylesheet" href="/static/css/app.css?v={{ css_version }}" />
   <style>
-    .submit-status { font-size: 12.5px; text-align: center; margin-top: 8px; min-height: 1.2em; }
-    .submit-status.ok { color: var(--accent-strong); }
-    .submit-status.error { color: var(--critical); }
+    /* .submit-status was PROMOTED to app/static/css/app.css by t11 so that
+       /modes/weekly's send-out modal can use it too. Do not redefine here. */
     .item-card.is-readonly .item-desc { white-space: normal; overflow: visible; text-overflow: clip; }
     .item-card.is-readonly { opacity: 0.85; }
 
@@ -26,8 +25,8 @@
     .admin-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .admin-actions .btn-primary { width: auto; padding: 10px 18px; }
     .admin-actions .submit-status { margin: 0; text-align: left; }
-    .btn-danger { background: var(--critical); }
-    .btn-danger:hover { background: var(--critical); opacity: 0.85; }
+    /* .btn-danger was PROMOTED to app/static/css/app.css by t11 (shared with
+       /modes/weekly's send-out modal). Do not redefine here. */
     .admin-form { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
     .admin-form .field { margin-bottom: 0; min-width: 180px; }
     .admin-form .btn-primary { width: auto; padding: 10px 20px; }
@@ -58,41 +57,9 @@
     .admin-row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .status-note { font-size: 13.5px; color: var(--ink-muted); }
 
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(10, 12, 10, 0.55);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      padding: 20px;
-    }
-    .modal-overlay[hidden] { display: none; }
-    .modal-panel {
-      background: var(--surface-raised);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 24px;
-      max-width: 400px;
-      width: 100%;
-      box-shadow: var(--shadow);
-    }
-    .modal-panel h3 { font-size: 17px; margin: 0 0 10px; }
-    .modal-panel p { font-size: 13.5px; color: var(--ink-muted); margin: 0 0 14px; line-height: 1.5; }
-    .modal-input {
-      width: 100%;
-      font: inherit;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      background: var(--surface);
-      color: var(--ink);
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .modal-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+    /* The .modal-* rules were PROMOTED to app/static/css/app.css by t11.
+       They are shared with /modes/weekly, which links the sheet but has no
+       inline styles of its own. Do not redefine them here -- one definition. */
 
     .field select {
       font: inherit;

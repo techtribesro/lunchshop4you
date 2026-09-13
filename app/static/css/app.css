@@ -1834,3 +1834,60 @@
     .weekly-another-pick select,
     .weekly-another-pick button { flex: 1 1 100%; min-width: 0; }
   }
+
+  /* ---------- Confirmation modal (SHARED) ----------
+     PROMOTED FROM app.html's inline <style> by t11. These rules previously
+     lived only in app.html, so /modes/weekly -- which links this sheet but
+     has no inline sheet of its own -- could not render the send-out
+     confirmation at all. Promoted rather than duplicated into weekly.html:
+     one definition, no parallel styling system.
+
+     .chip-btn (the modal's Cancel) was ALREADY here at :389, so it is not
+     repeated. .btn-danger and .submit-status are promoted alongside the
+     .modal-* rules because the modal's markup uses them: without them the
+     confirm button renders as a plain accent button rather than critical
+     red, and the status line loses its ok/error colouring. */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 12, 10, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal-panel {
+    background: var(--surface-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: var(--shadow);
+  }
+  .modal-panel h3 { font-size: 17px; margin: 0 0 10px; }
+  .modal-panel p { font-size: 13.5px; color: var(--ink-muted); margin: 0 0 14px; line-height: 1.5; }
+  .modal-input {
+    width: 100%;
+    font: inherit;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .modal-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+  /* Critical-action variant of .btn-primary, used by the modal's confirm. */
+  .btn-danger { background: var(--critical); }
+  .btn-danger:hover { background: var(--critical); opacity: 0.85; }
+
+  /* Inline status line under a submit/confirm action. */
+  .submit-status { font-size: 12.5px; text-align: center; margin-top: 8px; min-height: 1.2em; }
+  .submit-status.ok { color: var(--accent-strong); }
+  .submit-status.error { color: var(--critical); }

@@ -15,12 +15,38 @@
     <nav class="view-nav">
       <a href="/modes">Výběr režimu</a>
     </nav>
+    {# t11: an admin working in weekly mode could not dispatch the order at all
+       -- the send-out CTA existed only on /orders, so dispatching meant
+       navigating away. Same control, same gate, same endpoint as app.html:124.
+       aria-label pins the full accessible name; the visible label is split so
+       narrow screens can drop the second word (see .send-out-btn in app.css). #}
+    {% if user.is_admin %}<button type="button" id="topbar-send-out" class="send-out-btn"
+            aria-label="Odeslat objednávku">Odeslat<span class="send-out-word"> objednávku</span></button>{% endif %}
     <div class="topbar-spacer"></div>
     <div class="user-chip">
       <span class="username">{{ user.username }}</span>
     </div>
     <button class="link-btn" type="button" id="logout-btn">Odhlásit</button>
   </div>
+
+  {# The confirmation modal, identical in markup and gate semantics to
+     app.html's. This is the destructive action -- it sends the same e-mail and
+     the same Telegram broadcast -- so it keeps the typed-ODESLAT gate and the
+     confirm button ships disabled. #}
+  {% if user.is_admin %}
+  <div class="modal-overlay" id="send-out-modal" hidden>
+    <div class="modal-panel">
+      <h3>Jste si jistí, že už objednal úplně každý v kanceláři?</h3>
+      <p>Tímto se dnešní objednávka odešle e-mailem restauraci a na Telegram všem odběratelům. Pro potvrzení napište <strong>ODESLAT</strong> do pole níže.</p>
+      <input type="text" id="send-out-confirm-input" class="modal-input" autocomplete="off" placeholder="ODESLAT" />
+      <div class="modal-actions">
+        <button type="button" class="chip-btn" id="send-out-cancel">Zrušit</button>
+        <button type="button" class="btn-primary btn-danger" id="send-out-confirm" disabled style="width:auto;padding:10px 20px;">Odeslat</button>
+      </div>
+      <p class="submit-status" id="send-out-modal-status"></p>
+    </div>
+  </div>
+  {% endif %}
 
   <main class="screen active weekly-shell">
     <h1>Týdenní objednávka</h1>
@@ -147,6 +173,71 @@
       await fetch("/logout", { method: "POST" });
       window.location.href = "/login";
     });
+
+    // ---- Admin send-out (t11) --------------------------------------------
+    //
+    // DUPLICATED VERBATIM from app.html rather than extracted into a shared
+    // module. This project is server-rendered Jinja2 with no bundler and no
+    // shared JS module -- both templates carry their own inline <script> -- so
+    // extracting would mean inventing module infrastructure the project does
+    // not have, which the run's constraints forbid. The two copies are kept
+    // BEHAVIOURALLY IDENTICAL; the gate below must match app.html's exactly.
+    //
+    // Deliberately OUTSIDE the `if (HAS_MENU && weekEl)` block below: on a week
+    // with no menu loaded that block never runs, but an admin must still be
+    // able to dispatch the orders that already exist.
+    //
+    // The elements above are rendered only for admins (they sit inside the
+    // admin-only Jinja conditional), so every lookup here is null for a normal
+    // user and the `if (sendOutBtn)` guard makes this block inert -- same
+    // structure as app.html.
+    //
+    // NOTE: do not write Jinja delimiters in this comment. A JS `//` comment
+    // does NOT hide them: Jinja parses the whole template before the browser
+    // ever sees it, so a literal if-tag here opens a block that never closes
+    // and the template fails to compile.
+    const sendOutBtn = document.getElementById("topbar-send-out");
+    const sendOutModal = document.getElementById("send-out-modal");
+    const sendOutInput = document.getElementById("send-out-confirm-input");
+    const sendOutConfirmBtn = document.getElementById("send-out-confirm");
+    const sendOutCancelBtn = document.getElementById("send-out-cancel");
+    const sendOutModalStatus = document.getElementById("send-out-modal-status");
+    const SEND_OUT_PHRASE = "ODESLAT";
+
+    function closeSendOutModal() {
+      sendOutModal.hidden = true;
+      sendOutInput.value = "";
+      sendOutConfirmBtn.disabled = true;
+      sendOutModalStatus.textContent = "";
+    }
+
+    if (sendOutBtn) {
+      sendOutBtn.addEventListener("click", () => {
+        sendOutModal.hidden = false;
+        sendOutInput.focus();
+      });
+      sendOutCancelBtn.addEventListener("click", closeSendOutModal);
+      sendOutModal.addEventListener("click", (e) => { if (e.target === sendOutModal) closeSendOutModal(); });
+      sendOutInput.addEventListener("input", () => {
+        sendOutConfirmBtn.disabled = sendOutInput.value.trim().toUpperCase() !== SEND_OUT_PHRASE;
+      });
+      sendOutConfirmBtn.addEventListener("click", async () => {
+        sendOutConfirmBtn.disabled = true;
+        sendOutModalStatus.textContent = "Odesílám...";
+        sendOutModalStatus.className = "submit-status";
+        const resp = await fetch("/admin/send-order-summary", { method: "POST" });
+        const body = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+          sendOutModalStatus.textContent = `Odesláno (${body.order_lines_sent} položek).`;
+          sendOutModalStatus.className = "submit-status ok";
+          setTimeout(closeSendOutModal, 1500);
+        } else {
+          sendOutModalStatus.textContent = body.detail || "Odeslání se nezdařilo.";
+          sendOutModalStatus.className = "submit-status error";
+          sendOutConfirmBtn.disabled = false;
+        }
+      });
+    }
 
     // ---- Mode 1: the guided one-day-at-a-time prompt ---------------------
     //
