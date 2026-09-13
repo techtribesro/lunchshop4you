@@ -43,6 +43,9 @@
     --warn-tint: #ffedcc;
     --critical: #c62828;
     --critical-tint: #fbe2e2;
+    --on-critical: #ffffff;
+    --critical-hover: #a51f1f;
+    --critical-shadow: 0 2px 10px -4px rgba(11, 31, 58, 0.45);
     --shadow: 0 1px 2px rgba(11, 31, 58, 0.08), 0 8px 24px -12px rgba(11, 31, 58, 0.25);
   }
 
@@ -64,6 +67,9 @@
       --warn-tint: #4a3418;
       --critical: #ef5350;
       --critical-tint: #4a1c1c;
+      --on-critical: #04121f;
+      --critical-hover: #c62f2c;
+      --critical-shadow: 0 2px 10px -4px rgba(0, 0, 0, 0.7);
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
     }
   }
@@ -86,6 +92,9 @@
     --warn-tint: #4a3418;
     --critical: #ef5350;
     --critical-tint: #4a1c1c;
+    --on-critical: #04121f;
+    --critical-hover: #c62f2c;
+    --critical-shadow: 0 2px 10px -4px rgba(0, 0, 0, 0.7);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
   }
 
@@ -274,7 +283,17 @@
     border-radius: 999px;
     padding: 3px;
   }
-  .view-nav button {
+  /* The <a> is listed alongside the <button>s deliberately. Same failure mode
+     as .chip-btn below: app.html ships `<a href="/modes">Výběr režimu</a>`
+     inside this nav, but the sheet had NO `.view-nav a` rule outside the
+     responsive block, so it fell through to browser defaults -- underlined,
+     unpadded, no pill radius -- while its <button> siblings in the same pill
+     got all of it. Sharing ONE selector list (rather than a parallel copy of
+     these values) is what keeps the two from drifting apart later.
+     It stays a real link to /modes: it is navigation, not a tab, so it never
+     takes aria-current and never gets the active treatment below. */
+  .view-nav button,
+  .view-nav a {
     background: none;
     border: none;
     color: var(--ink-muted);
@@ -284,12 +303,22 @@
     font-weight: 600;
     transition: background-color 0.15s ease, color 0.15s ease;
   }
-  .view-nav button:hover:not([aria-current="true"]) { color: var(--ink); background: var(--line-soft); }
+  /* The <button> is already a flex item that centres its own label; an inline
+     <a> is not, so without this its text box sits on the baseline and the
+     padding reads taller on one side. */
+  .view-nav a {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+  }
+  .view-nav button:hover:not([aria-current="true"]),
+  .view-nav a:hover { color: var(--ink); background: var(--line-soft); }
   .view-nav button[aria-current="true"] {
     background: var(--accent);
     color: var(--on-accent);
   }
   .view-nav button:focus-visible,
+  .view-nav a:focus-visible,
   .day-pill:focus-visible,
   .stepper button:focus-visible,
   .link-btn:focus-visible {
@@ -297,19 +326,25 @@
     outline-offset: 2px;
   }
 
+  /* Every colour here MUST come through a token. This block previously used
+     var(--on-accent) on a --critical background (correct only by coincidence,
+     since the two palettes happened to agree), plus a hardcoded pink shadow
+     and a hardcoded lighter hover -- both pinned to the LIGHT red, so neither
+     followed --critical into dark. The shadow haloed against the dark navy bar
+     and the hover went lighter, inverting the affordance. */
   .send-out-btn {
     background: var(--critical);
-    color: var(--on-accent);
+    color: var(--on-critical);
     border: none;
     border-radius: 999px;
     padding: 10px 22px;
     font-size: 14.5px;
     font-weight: 700;
     letter-spacing: 0.01em;
-    box-shadow: 0 2px 10px -4px rgba(239, 167, 167, 0.6);
+    box-shadow: var(--critical-shadow);
     transition: background-color 0.15s ease, transform 0.1s ease;
   }
-  .send-out-btn:hover { background: #e28c8c; }
+  .send-out-btn:hover { background: var(--critical-hover); }
   .send-out-btn:active { transform: translateY(1px); }
   .send-out-btn:focus-visible { outline: 2px solid var(--critical); outline-offset: 2px; }
 
@@ -1208,11 +1243,35 @@
       overflow-y: hidden;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
+      /* SCROLL AFFORDANCE (t7 design pass).
+         Measured at 390px as admin: scrollWidth 339 vs clientWidth 205, so
+         134px -- "Přehled" and "Admin" -- sits hidden INSIDE the scrollport,
+         identically in both themes. The two rules just above deliberately
+         suppress the scrollbar, and now that the anchor renders as a clean
+         pill the container's rounded edge reads as "the nav ends here", so
+         nothing advertised the swipe.
+         This is a DISCOVERABILITY defect, not a reachability one: Tab walks
+         into both entries and the browser scrolls the port to 134 with focus
+         staying in view, and a swipe reaches them too. So the fix is purely
+         visual -- no tabindex, no ARIA, no JS, no markup change.
+         Fading the trailing edge makes the clipped pill read as a soft cut
+         that continues, rather than a hard end. mask-image needs no
+         pseudo-element (none exists on .view-nav, so nothing collides) and
+         where it is unsupported the nav simply keeps today's behaviour.
+         Scoped to this narrow block on purpose: at 1440px the nav measures
+         scrollWidth 398 == clientWidth 398, nothing is hidden, and a fade
+         there would dim a pill for no reason. */
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     }
     .view-nav::-webkit-scrollbar { display: none; }
     .view-nav button,
     .view-nav a { white-space: nowrap; flex: none; }
-    .view-nav button { padding: 7px 11px; font-size: 12.5px; }
+    /* The anchor rides along: now that it is padded like a pill in the main
+       block, leaving it at the wide 7px/16px would make it the widest thing
+       in a scrollport whose width is already fought over at 390px. */
+    .view-nav button,
+    .view-nav a { padding: 7px 11px; font-size: 12.5px; }
 
     /* The avatar already carries identity, so the username text goes. */
     .user-chip span.username { display: none; }
