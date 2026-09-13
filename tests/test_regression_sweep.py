@@ -550,3 +550,111 @@ class TestSheetsSyncStillInvokedOnWrite:
         import app.routers.orders as orders_module
 
         assert orders_module.sync_all.__name__ == "_fake_sync_all"
+
+
+@pytest.fixture
+def stub_order_summary_sends(monkeypatch) -> list:
+    """Records every call to the outbound send layer, and lets none of them run.
+
+    Shaped after `stub_sheets_sync` in tests/conftest.py: monkeypatch and log,
+    so a test can assert on what WOULD have been dispatched. Both helpers reach
+    real networks when there are rows to report -- `send_daily_order_summary`
+    opens an SMTP connection to Gmail and then broadcasts on Telegram, and
+    `send_telegram_only` hits the Telegram API -- so recording rather than
+    calling is what keeps this safe as well as observable.
+
+    BINDERS ARE DISCOVERED, NOT LISTED. `app.routers.admin` does
+    `from app.services.order_summary import send_daily_order_summary, ...`, so
+    patching only the source module would leave that already-bound reference
+    live. Hardcoding `app.routers.admin` would pin only today's layout: the
+    regression this guards against is a FUTURE module adding a send call, and a
+    module this fixture never heard of would slip straight through. So every
+    already-imported `app.*` module is swept for an attribute that is the real
+    helper and rebound in place, which catches any new import site for free.
+    """
+    import sys
+
+    import app.services.order_summary as order_summary
+
+    calls: list = []
+
+    def _recorder(name, original):
+        def _fake(session, *args, **kwargs):
+            calls.append((name, session, args, kwargs))
+            return 0
+
+        _fake.__name__ = f"_fake_{name}"
+        _fake._wraps = original
+        return _fake
+
+    for name in ("send_daily_order_summary", "send_telegram_only"):
+        original = getattr(order_summary, name)
+        fake = _recorder(name, original)
+        # Rebind at every module that already holds a reference to the real
+        # function, then at the source module itself.
+        for mod_name, module in list(sys.modules.items()):
+            if not mod_name.startswith("app.") or module is None:
+                continue
+            if getattr(module, name, None) is original:
+                monkeypatch.setattr(f"{mod_name}.{name}", fake)
+        monkeypatch.setattr(f"app.services.order_summary.{name}", fake)
+
+    return calls
+
+
+class TestSavingAnOrderSendsNothing:
+    """The mirror image of `TestSendOutModalGate`.
+
+    That class proves dispatch is HARD TO TRIGGER (the modal ships disabled,
+    the ODESLAT phrase gates it, non-admins get no button and a 403 on the
+    route). Nothing asserted the other half: that the ORDINARY save path fires
+    no dispatch at all. Today `submit_order` writes rows, commits, and calls
+    `sync_all` -- a Google Sheets mirror, not an outbound notification -- so the
+    separation holds BY CONSTRUCTION rather than by any guard. A later
+    notify-on-save would satisfy the entire existing suite unnoticed. This is
+    the tripwire for that.
+    """
+
+    def test_submitting_an_order_dispatches_nothing(
+        self,
+        logged_in_client,
+        menu_week,
+        orderable_weekdays,
+        stub_sheets_sync,
+        stub_order_summary_sends,
+        db,
+        user,
+    ):
+        order_date = orderable_weekdays[0]
+        response = logged_in_client.post(
+            "/orders",
+            json={
+                "order_date": order_date.isoformat(),
+                "items": [
+                    {"item_name": _item_for(order_date, "soup"), "quantity": 1, "note": ""},
+                    {"item_name": _item_for(order_date, "main 1"), "quantity": 2, "note": ""},
+                ],
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        # The save must genuinely have happened, otherwise "nothing was sent"
+        # would be trivially true for an order that was never written.
+        saved = (
+            db.query(Order)
+            .filter(Order.user_id == user.id, Order.order_date == order_date)
+            .all()
+        )
+        assert len(saved) == 2, f"expected the order to be persisted, got {saved!r}"
+        assert {row.item_name for row in saved} == {
+            _item_for(order_date, "soup"),
+            _item_for(order_date, "main 1"),
+        }
+
+        # ...and with rows on file -- the exact condition under which the send
+        # helpers would do real work rather than early-returning on no orders --
+        # saving still dispatched nothing.
+        assert stub_order_summary_sends == [], (
+            "POST /orders must not send an email or Telegram message; "
+            f"recorded dispatches: {stub_order_summary_sends!r}"
+        )
