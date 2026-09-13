@@ -450,9 +450,12 @@ Current, unresolved behaviour — distinct from §9, which is history. If you ar
 this after a fix has landed, **check the code before trusting this section**; it
 describes the state at the time of writing (September 11, 2026).
 
-*No open issues at present. The two weekend week-resolution bugs described below were both
-fixed before or shortly after this document was merged; they are retained here because the
-reasoning is worth keeping and because they are the same defect in two places.*
+*The two weekend week-resolution bugs described below were both fixed before or shortly
+after this document was merged; they are retained here because the reasoning is worth
+keeping and because they are the same defect in two places. The topbar fix of 2026-09-13
+(also below) left four findings deliberately unfixed — those are the only genuinely open
+issues in this section, and they are listed in that block rather than here so they stay
+next to the reasoning that produced them.*
 
 ### FIXED 2026-09-11 — weekend submissions were invisible to the reader endpoints
 
@@ -541,6 +544,102 @@ operator's report. They do not fix this symptom, but they remain worth doing for
 - An admin-only "pull next week's menu now" affordance. The endpoint already exists —
   `POST /admin/parse-menu?for_next_week=true` (§5) — so this is a UI affordance over
   existing behaviour, not new ingestion logic.
+
+### FIXED 2026-09-13 — the topbar's "Výběr režimu" link was an unstyled browser default
+
+**This is resolved.** Reported by the operator as a screenshot of the `/orders` topbar in
+dark theme with *"that ui needs to be fixed"*. It looked like four separate problems — an
+underline, a misaligned item, a colour mismatch, and a glowing red button — and it was
+**one defect plus token drift**, not four. The original description follows, for the record:
+
+- **`.view-nav` styled `button` only.** The "Výběr režimu" `<a>` (`app/templates/app.html`,
+  at the time of writing line 116) had **no rule anywhere** in the 1777-line stylesheet
+  except a responsive `white-space`/`flex` declaration. The global `a { color: inherit }`
+  set colour but never cleared `text-decoration`, so the anchor fell through to the browser
+  default — underlined, unpadded, no pill radius, no muted colour, no hover — while its
+  three `<button>` siblings inside the same pill got all four. That single gap explains
+  every symptom in the screenshot, including the "misalignment", which was not a separate
+  bug at all.
+
+  This is the **same class of defect** the stylesheet already documents fixing at its
+  `.chip-btn` rule: a class used by a template with no rule in the sheet, rendering as a
+  raw browser default. Two instances of one family — if a third element in this sheet looks
+  unstyled, check whether it has a rule at all before redesigning anything.
+
+  The fix gives `.view-nav a` and `.view-nav button` a **shared declaration block**, so the
+  two cannot drift apart again; a future edit to the pill styling necessarily moves both.
+  `aria-current="true"` still marks the active tab, and the anchor — a real navigation to
+  `/modes`, not a tab — correctly does **not** carry it.
+
+- **Theme-token drift on the send-out CTA, a genuine dark-theme bug.** The button carried a
+  `box-shadow` hardcoded to `rgba(239, 167, 167, 0.6)` — a **pink** shadow fixed to the
+  light-theme red that never followed `--critical` into dark mode, so the button *haloed*
+  instead of being grounded. That is what read as a "glow" in the screenshot: token drift,
+  not design intent. Its `:hover` was likewise hardcoded to `#e28c8c`, which is **lighter
+  than the red in both themes** — hovering *brightened* a destructive button, inverting the
+  usual affordance.
+
+  Separately and semantically, the CTA set `color: var(--on-accent)` on
+  `background: var(--critical)`. The token means "text on **accent**". It rendered
+  correctly only because the two palettes happen to coincide in both themes — **by
+  coincidence, not by construction**, and it would have broken silently the moment
+  `--accent` or `--critical` moved independently. This is the same read/write-agree-by-
+  construction problem as the week-resolution fixes above, in CSS rather than Python.
+
+  Fixed by introducing `--on-critical`, `--critical-hover` and `--critical-shadow`, defined
+  in **all three** theme blocks (`:root`, the `prefers-color-scheme` block, and the explicit
+  `[data-theme="dark"]` opt-in). The two dark blocks were verified byte-identical in value
+  — 20 tokens each, zero differing — because the sheet's own comment warns that the two
+  dark paths drift otherwise. No colour literal remains in the `.send-out-btn` block outside
+  a `var()`.
+
+- **A third, smaller finding fixed in the same pass:** the narrow (390px) nav hid roughly
+  134px of content (`scrollWidth` 339 vs `clientWidth` 205) behind a scrollport whose
+  indicator is suppressed by `scrollbar-width: none`, so "Přehled" and "Admin" were
+  reachable only by a swipe nothing advertised. A `mask-image` fade on the trailing edge
+  now hints at the overflow. Verified scoped to narrow only: at 1440px the before/after
+  captures are byte-identical.
+
+  **The 390px layout was explicitly *not* regressed, and this is worth recording because
+  the run's own brief predicted otherwise.** The plan claimed the admin bar at 390px would
+  be "strictly worse" with mid-word clipping. Measured twice, independently: **no**
+  horizontal page scroll, `Odhlásit` fully visible, **no** mid-word clipping, and the
+  scrollport boundary is *cleaner* after the fix than before. The surrounding rules carry
+  in-file comments recording that an earlier `7rem` floor **did** clip and was deliberately
+  fixed — acting on the prediction would have regressed a hard-won layout. Do not rewrite
+  those rules without re-measuring.
+
+- **Separately, the operator asked to confirm the UI saves without sending.** It already
+  did, and it still does: `POST /orders` persists and dispatches nothing, and the only
+  callers of the send helpers are two admin routes behind `require_admin` plus a
+  typed-`ODESLAT` confirmation modal. **Nothing tested it**, so the separation held by
+  construction rather than by a guard. `tests/test_regression_sweep.py` now pins it; its
+  fixture discovers binders by sweeping `sys.modules` rather than hardcoding them, so a
+  newly added send path is covered automatically instead of silently escaping the net.
+
+Scope was three files (`app/static/css/app.css`, `scripts/shots.py`,
+`tests/test_regression_sweep.py`), +204/−13, with **no template or other `app/` file
+touched**. The harness change was a prerequisite, not scope creep: the CTA is admin-gated,
+so it had never appeared in any screenshot until `scripts/shots.py` learned `--admin`.
+Evidence was screenshots at 1440×900 and 390×844 in **both** themes, before and after, with
+accessibility trees byte-identical to baseline throughout; the suite went 134 → **135
+passed** (the new regression test).
+
+**Deliberately not fixed (open).** Found and recorded during the design pass, left alone to
+keep this change contained. All four are seeded into the queued follow-up UI-modernisation
+work:
+
+- **Every topbar control is under the 44px touch minimum.** `.link-btn` (`Odhlásit`) is
+  19.5px tall with `padding: 0`; the nav pills are 32.8px; the CTA is 34px. This is the
+  most user-visible of the four on a phone.
+- **`Zaznamenat` is visually identical to every other primary action**, so "saved as draft"
+  and "dispatched" are indistinguishable at a glance — and the mobile bar
+  (`app/templates/app.html`, at the time of writing line 212) carries **no** draft note at
+  all. Given the save-vs-send separation pinned above, the ambiguity is presentational, not
+  behavioural.
+- **`touch-action: manipulation` is missing** on topbar controls.
+- **The nav fade applies unconditionally** in the narrow block rather than gating on real
+  overflow. Cosmetic; raised as a reviewer's nit.
 
 ## 9. History / Notable Fixes
 
