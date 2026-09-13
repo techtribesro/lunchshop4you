@@ -169,7 +169,7 @@ def test_dish_shown_as_orderable_can_actually_be_ordered(
         "/orders",
         json={
             "order_date": day["date"],
-            "items": [{"item_name": day["items"][0]["item_name"], "quantity": 1, "note": ""}],
+            "items": [{"item_name": day["items"][0]["name"], "quantity": 1, "note": ""}],
         },
     )
     assert resp.status_code == 200, (
