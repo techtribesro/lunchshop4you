@@ -283,7 +283,17 @@
     border-radius: 999px;
     padding: 3px;
   }
-  .view-nav button {
+  /* The <a> is listed alongside the <button>s deliberately. Same failure mode
+     as .chip-btn below: app.html ships `<a href="/modes">Výběr režimu</a>`
+     inside this nav, but the sheet had NO `.view-nav a` rule outside the
+     responsive block, so it fell through to browser defaults -- underlined,
+     unpadded, no pill radius -- while its <button> siblings in the same pill
+     got all of it. Sharing ONE selector list (rather than a parallel copy of
+     these values) is what keeps the two from drifting apart later.
+     It stays a real link to /modes: it is navigation, not a tab, so it never
+     takes aria-current and never gets the active treatment below. */
+  .view-nav button,
+  .view-nav a {
     background: none;
     border: none;
     color: var(--ink-muted);
@@ -293,12 +303,22 @@
     font-weight: 600;
     transition: background-color 0.15s ease, color 0.15s ease;
   }
-  .view-nav button:hover:not([aria-current="true"]) { color: var(--ink); background: var(--line-soft); }
+  /* The <button> is already a flex item that centres its own label; an inline
+     <a> is not, so without this its text box sits on the baseline and the
+     padding reads taller on one side. */
+  .view-nav a {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+  }
+  .view-nav button:hover:not([aria-current="true"]),
+  .view-nav a:hover { color: var(--ink); background: var(--line-soft); }
   .view-nav button[aria-current="true"] {
     background: var(--accent);
     color: var(--on-accent);
   }
   .view-nav button:focus-visible,
+  .view-nav a:focus-visible,
   .day-pill:focus-visible,
   .stepper button:focus-visible,
   .link-btn:focus-visible {
@@ -1227,7 +1247,11 @@
     .view-nav::-webkit-scrollbar { display: none; }
     .view-nav button,
     .view-nav a { white-space: nowrap; flex: none; }
-    .view-nav button { padding: 7px 11px; font-size: 12.5px; }
+    /* The anchor rides along: now that it is padded like a pill in the main
+       block, leaving it at the wide 7px/16px would make it the widest thing
+       in a scrollport whose width is already fought over at 390px. */
+    .view-nav button,
+    .view-nav a { padding: 7px 11px; font-size: 12.5px; }
 
     /* The avatar already carries identity, so the username text goes. */
     .user-chip span.username { display: none; }
