@@ -91,11 +91,13 @@ class TestStepHostMarkup:
         assert "není načtené žádné menu" in body
 
     def test_leaves_a_named_seam_for_the_on_behalf_loop(self, logged_in_client, menu_week):
-        """t8 appends its 'someone else?' question into #weekly-done-extra and
-        re-enters via startPromptFor(). Both must stay addressable."""
+        """t13 replaced the end-of-week question (and its #weekly-done-extra
+        host) with the up-front "Pro koho objednáváte?" selector, which
+        re-enters the very same startPromptFor() seam. Both must stay
+        addressable."""
         body = rendered(logged_in_client)
 
-        assert 'id="weekly-done-extra"' in body
+        assert 'id="weekly-target-user"' in body
         assert "window.startPromptFor = startPromptFor" in body
 
     def test_posts_the_server_computed_date_verbatim(self, logged_in_client, menu_week):

@@ -62,6 +62,30 @@
     <p class="weekly-intro">Vyberte si jídlo na celý týden najednou. U každého dne
        můžete přidat poznámku.</p>
 
+    {# ---- WHO ARE YOU ORDERING FOR? (t13) ----------------------------------
+       OPERATOR DECISION 2026-09-14, verbatim: "change the weekly prompt to who
+       are you ordering for and default is 'me' and then a drop menu for others
+       thats' it why overcomplicate".
+
+       This REPLACED the end-of-week "Chcete objednat pro někoho dalšího?"
+       yes/no question that used to be injected into #weekly-done-extra from
+       finish() -- i.e. only AFTER the whole week had already been submitted,
+       which is the sequencing defect the operator fixed. Asking up front makes
+       the target visible by construction, so no hint text or banner is needed
+       (and adding one was explicitly rejected as overcomplication).
+
+       The logged-in user is rendered server-side as the selected option, so
+       the control is correct on arrival even before GET /users resolves; the
+       script then appends everyone else. Changing it calls startPromptFor(),
+       the SAME seam the old loop re-entered -- there is no parallel
+       submission path. #}
+    <div class="weekly-target">
+      <label class="weekly-target-label" for="weekly-target-user">Pro koho objednáváte?</label>
+      <select id="weekly-target-user" class="weekly-target-select" name="weekly-target-user">
+        <option value="{{ user.username }}" selected>{{ user.username }}</option>
+      </select>
+    </div>
+
     {# ---- SINGLE-SCREEN WHOLE-WEEK FORM (t18) ------------------------------
        OPERATOR DECISION 2026-09-11, overriding "batch then review": all five
        weekdays are shown at once as ONE compact form, submitted in one go.
@@ -70,7 +94,9 @@
        Kept, because only the rhythm was rejected and not the character:
          * lettered a/b/c choices as REAL radios with real labels
          * an optional per-day note, capped at the server's 255
-         * the end-of-week "someone else?" loop and the startPromptFor seam
+         * the startPromptFor seam -- now re-entered by the up-front
+           "Pro koho objednáváte?" selector above rather than by an
+           end-of-week question (t13)
 
        Filled by the client script from WEEK so one renderer serves both the
        first pass and every on-behalf pass. #}
@@ -116,12 +142,12 @@
       </div>
     </section>
 
-    {# End-of-week summary. t8 appends its "order for someone else?" question
-       inside #weekly-done-extra -- see startPromptFor() in the script below. #}
+    {# End-of-week summary. t13 removed the "order for someone else?" question
+       that used to be injected here after submission -- who the order is for
+       is now asked UP FRONT by the selector above. #}
     <section id="weekly-done" class="weekly-done" hidden aria-live="polite">
       <h2>Hotovo</h2>
       <p class="weekly-done-summary" id="weekly-done-summary"></p>
-      <div id="weekly-done-extra"></div>
       <p class="weekly-done-back"><a href="/modes">Zpět na výběr režimu</a></p>
     </section>
 
@@ -449,12 +475,6 @@
           const who = targetUser === USERNAME ? "Objednávka uložena" : `Objednávka uložena pro ${targetUser}`;
           summaryEl.textContent = `${who} — ${lines.join(", ")}.`;
         }
-        // t8 hook: the "order for someone else?" question is appended into
-        // #weekly-done-extra and calls startPromptFor(username) to re-run the
-        // same prompt for the next person.
-        document.dispatchEvent(new CustomEvent("weekly:done", {
-          detail: { username: targetUser, picks: Object.assign({}, picks) },
-        }));
       }
 
       // ONE submit for the whole week. Each chosen day is still its own
@@ -490,22 +510,26 @@
         }
       });
 
-      // ---- End-of-week: "order for someone else?" -----------------------
+      // ---- "Pro koho objednáváte?" -- the up-front target selector -------
       //
-      // The operator's words: "at the end when you are done with the week,
-      // you get asked if you wanna order for someone else and who it is and
-      // it runs the same prompt". So: a yes/no question, then a picker of
+      // OPERATOR DECISION 2026-09-14, verbatim: "change the weekly prompt to
+      // who are you ordering for and default is 'me' and then a drop menu for
+      // others thats' it why overcomplicate".
+      //
+      // This REPLACED the end-of-week yes/no "someone else?" question, which
+      // only appeared AFTER the whole week had been submitted -- the
+      // sequencing defect the operator fixed. The target is now chosen BEFORE
+      // any picking, so it is visible by construction; no hint text, banner or
+      // end-of-week question is added on top (that was explicitly rejected).
+      //
       // EXISTING REGISTERED USERS ONLY (GET /users -- no free-text names, no
-      // user creation, no schema change), then startPromptFor() re-runs the
-      // very same stepper for that person.
-      //
-      // Isolation of the previous person's orders is structural, not guarded:
-      // startPromptFor() clears `picks`/`cursor`, and submitDay() posts
-      // `on_behalf_of` only when the target isn't the logged-in user, so every
-      // pass writes under its own target's user id. POST /orders' delete-then-
-      // reinsert is scoped to (user_id, order_date), so a second pass cannot
-      // reach the first person's rows.
-      const extraEl = document.getElementById("weekly-done-extra");
+      // user creation, no schema change). Changing the selector re-enters
+      // startPromptFor(), the SAME seam the old loop used: it clears `picks`
+      // and rebuilds the form, and submitDay() posts `on_behalf_of` only when
+      // the target isn't the logged-in user, so every pass writes under its
+      // own target's user id. POST /orders' delete-then-reinsert is scoped to
+      // (user_id, order_date), so one target's rows cannot reach another's.
+      const targetSelect = document.getElementById("weekly-target-user");
 
       // Deliberately NO overwrite guard / confirmation / audit trail here:
       // ordering for a colleague who already ordered that day overwrites it.
@@ -517,128 +541,35 @@
         return await resp.json();
       }
 
-      function renderAnotherQuestion() {
-        if (!extraEl) return;
-        extraEl.innerHTML = "";
-
-        // Real fieldset + radios: focusable, keyboard-operable, with an
-        // accessible name from the legend -- not clickable divs.
-        const fieldset = document.createElement("fieldset");
-        fieldset.className = "weekly-another";
-        fieldset.id = "weekly-another";
-
-        const legend = document.createElement("legend");
-        legend.textContent = "Chcete objednat pro někoho dalšího?";
-        fieldset.appendChild(legend);
-
-        const choices = [
-          { id: "weekly-another-yes", value: "yes", label: "Ano" },
-          { id: "weekly-another-no", value: "no", label: "Ne" },
-        ];
-        choices.forEach(choice => {
-          const wrap = document.createElement("div");
-          wrap.className = "weekly-another-option";
-          const input = document.createElement("input");
-          input.type = "radio";
-          input.name = "weekly-another";
-          input.id = choice.id;
-          input.value = choice.value;
-          const label = document.createElement("label");
-          label.htmlFor = choice.id;
-          label.textContent = choice.label;
-          wrap.appendChild(input);
-          wrap.appendChild(label);
-          fieldset.appendChild(wrap);
-        });
-
-        // The "who" picker stays hidden until "Ano" is chosen.
-        const pickRow = document.createElement("div");
-        pickRow.className = "weekly-another-pick";
-        pickRow.id = "weekly-another-pick";
-        pickRow.hidden = true;
-
-        const selectLabel = document.createElement("label");
-        selectLabel.htmlFor = "weekly-another-user";
-        selectLabel.textContent = "Pro koho objednáváme?";
-
-        const select = document.createElement("select");
-        select.id = "weekly-another-user";
-        select.name = "weekly-another-user";
-
-        const startBtn = document.createElement("button");
-        startBtn.type = "button";
-        startBtn.id = "weekly-another-start";
-        startBtn.textContent = "Pokračovat";
-        startBtn.disabled = true;
-
-        pickRow.appendChild(selectLabel);
-        pickRow.appendChild(select);
-        pickRow.appendChild(startBtn);
-        fieldset.appendChild(pickRow);
-
-        const statusRow = document.createElement("p");
-        statusRow.id = "weekly-another-status";
-        statusRow.className = "weekly-another-status";
-        fieldset.appendChild(statusRow);
-
-        extraEl.appendChild(fieldset);
-
-        let loaded = false;
-        async function loadUsers() {
-          if (loaded) return;
-          statusRow.textContent = "Načítám uživatele…";
-          try {
-            const names = await fetchUsernames();
-            select.innerHTML = "";
-            // Everyone except whoever this pass just ordered for; re-running
-            // the same person immediately would only overwrite what we wrote.
-            const offer = names.filter(name => name !== targetUser);
-            if (!offer.length) {
-              statusRow.textContent = "Žádní další uživatelé nejsou k dispozici.";
-              return;
-            }
-            offer.forEach(name => {
+      // The logged-in user is already rendered server-side as the selected
+      // option, so the control is correct on arrival even if /users is slow or
+      // fails; this only appends everyone else.
+      async function loadTargetUsers() {
+        if (!targetSelect) return;
+        try {
+          const names = await fetchUsernames();
+          names
+            .filter(name => name !== USERNAME)
+            .forEach(name => {
               const option = document.createElement("option");
               option.value = name;
               option.textContent = name;
-              select.appendChild(option);
+              targetSelect.appendChild(option);
             });
-            loaded = true;
-            startBtn.disabled = false;
-            statusRow.textContent = "";
-          } catch (err) {
-            statusRow.textContent = err.message;
-          }
+        } catch (err) {
+          // Leave the default (me) in place -- ordering for yourself, the
+          // overwhelmingly common case, must not be blocked by /users.
         }
-
-        fieldset.addEventListener("change", event => {
-          if (event.target.name !== "weekly-another") return;
-          if (event.target.value === "yes") {
-            pickRow.hidden = false;
-            loadUsers();
-          } else {
-            // "Ne" ends the flow cleanly: the picker is dismissed and the
-            // flow is closed out with a confirmation. The question itself is
-            // left in place rather than torn out from under the click that
-            // triggered it -- removing the radio mid-click loses the control
-            // the user just operated (and its checked state with it).
-            pickRow.hidden = true;
-            statusRow.textContent = "Hotovo, objednávka je uzavřená.";
-          }
-        });
-
-        startBtn.addEventListener("click", () => {
-          const chosen = select.value;
-          if (!chosen) return;
-          extraEl.innerHTML = "";
-          startPromptFor(chosen);
-        });
       }
 
-      // finish() announces the end of a pass; that is where the question goes.
-      document.addEventListener("weekly:done", renderAnotherQuestion);
+      if (targetSelect) {
+        targetSelect.addEventListener("change", () => {
+          startPromptFor(targetSelect.value);
+        });
+        loadTargetUsers();
+      }
 
-      // Entry point, and the seam t8 re-enters for each additional person.
+      // Entry point, re-entered whenever the target selector changes.
       // Resets picks and rebuilds the week form so a second pass starts
       // clean -- every radio and note box is recreated empty, which is what
       // keeps one person's choices from leaking into the next person's pass.
@@ -646,7 +577,7 @@
         targetUser = username || USERNAME;
         picks = {};
         // Nothing selectable at all (e.g. every day past): go straight to the
-        // end-of-week question rather than showing an unusable empty form.
+        // summary rather than showing an unusable empty form.
         if (!WEEK.some(isSteppable)) {
           weekEl.hidden = true;
           finish();
