@@ -44,6 +44,11 @@ COMMON OPTIONS
                       (see --out resolution below).
   --themes LIST       Comma-separated subset of {light,dark}. Default: light.
   --no-login          Capture anonymous (logged-out) pages instead.
+  --admin             Log in as the seeded ADMIN instead of the normal user.
+                      Required for admin-only chrome: the "Odeslat
+                      objednavku" CTA is gated on {% if user.is_admin %}
+                      (app/templates/app.html) and is absent from the DOM
+                      entirely for a normal user. Default: normal user.
   --port N            Bind port. Default: an auto-picked free port.
   --base-url URL      Attach to an ALREADY-RUNNING server instead of
                       starting one (no seeding, no teardown).
@@ -258,14 +263,22 @@ def parse_route(spec: str) -> tuple[str, str]:
     return path, name
 
 
-def login(context, base_url: str) -> None:
+def login(context, base_url: str, username: str = SEED_USER,
+          password: str = SEED_PASSWORD) -> None:
     """Log in via the real form so the session cookie is set exactly as a
-    user's would be."""
+    user's would be.
+
+    Defaults to the non-admin SEED_USER so existing evidence stays
+    reproducible; pass the admin credentials (see --admin) to capture
+    admin-only chrome such as the .send-out-btn CTA, which app.html gates
+    behind `{% if user.is_admin %}` and which simply does not exist in the
+    DOM for a normal user.
+    """
     page = context.new_page()
     try:
         page.goto(f"{base_url}/login", wait_until="domcontentloaded")
-        page.fill("#u", SEED_USER)
-        page.fill("#p", SEED_PASSWORD)
+        page.fill("#u", username)
+        page.fill("#p", password)
         # login.html posts /login via fetch() and THEN assigns
         # window.location.href = "/modes". There is no form navigation, so
         # expect_navigation() has no event to catch and times out.
@@ -273,7 +286,10 @@ def login(context, base_url: str) -> None:
         page.wait_for_url("**/modes", timeout=15000)
         if "/login" in page.url:
             error = page.text_content("#login-error") or ""
-            raise RuntimeError(f"Login failed, still on /login. Page error: {error.strip()!r}")
+            raise RuntimeError(
+                f"Login as {username!r} failed, still on /login. "
+                f"Page error: {error.strip()!r}"
+            )
     finally:
         page.close()
 
@@ -343,6 +359,10 @@ def main() -> int:
     parser.add_argument("--out", default=None, help="Output directory.")
     parser.add_argument("--themes", default="light", help="Comma list: light,dark")
     parser.add_argument("--no-login", action="store_true", help="Capture logged-out.")
+    parser.add_argument("--admin", action="store_true",
+                        help="Log in as the seeded ADMIN user instead of the normal "
+                             "user, so admin-only chrome (the 'Odeslat objednavku' "
+                             "CTA) renders. Default: the normal user.")
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--base-url", default=None,
                         help="Attach to a running server instead of starting one.")
@@ -405,8 +425,12 @@ def main() -> int:
             try:
                 context = browser.new_context()
                 if not args.no_login:
-                    login(context, base_url)
-                    print(f"[shots] logged in as {SEED_USER}")
+                    username, password = (
+                        (SEED_ADMIN, SEED_ADMIN_PASSWORD) if args.admin
+                        else (SEED_USER, SEED_PASSWORD)
+                    )
+                    login(context, base_url, username, password)
+                    print(f"[shots] logged in as {username}")
 
                 for path, name in routes:
                     for theme in themes:
