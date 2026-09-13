@@ -17,7 +17,7 @@ import re
 from datetime import timedelta
 
 from app.routers.pages import DAY_LABELS_CZ
-from app.timezone import today_local, week_start
+from app.timezone import menu_target_week_start, today_local
 
 
 def extract_js_const(body: str, name: str):
@@ -79,9 +79,15 @@ class TestWeeklyPayloadShape:
 
     def test_each_day_carries_its_iso_date(self, logged_in_client, menu_week):
         """Dates are computed server-side so the client can post order_date
-        verbatim instead of re-deriving it in JS."""
+        verbatim instead of re-deriving it in JS.
+
+        The page renders the ORDERABLE week, so the dates are anchored to
+        menu_target_week_start() -- the same helper POST /orders writes under.
+        On a weekend week_start() resolves to the outgoing Monday instead, and
+        the page would show a week that ordering rejects with 400.
+        """
         week = extract_js_const(logged_in_client.get("/modes/weekly").text, "WEEK")
-        ws = week_start(today_local())
+        ws = menu_target_week_start(today_local())
 
         assert [day["date"] for day in week] == [
             (ws + timedelta(days=offset)).isoformat() for offset in range(5)

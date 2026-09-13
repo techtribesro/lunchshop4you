@@ -450,8 +450,9 @@ Current, unresolved behaviour — distinct from §9, which is history. If you ar
 this after a fix has landed, **check the code before trusting this section**; it
 describes the state at the time of writing (September 11, 2026).
 
-*No open issues at present. The weekend read bug described below was fixed before this
-document was merged; it is retained here only because §9 records the reasoning.*
+*No open issues at present. The two weekend week-resolution bugs described below were both
+fixed before or shortly after this document was merged; they are retained here because the
+reasoning is worth keeping and because they are the same defect in two places.*
 
 ### FIXED 2026-09-11 — weekend submissions were invisible to the reader endpoints
 
@@ -486,6 +487,61 @@ the record:
   `app/routers/orders.py` (`my_week_orders` and `user_week_orders`), and
   `menu_target_week_start` — cited above as the precedent — is exactly what it adopted.
 
+### FIXED 2026-09-13 — the page routes rendered a different week than ordering accepted
+
+**This is resolved.** It is the *same class of divergence* as the 2026-09-11 fix above,
+on the other side of the app: that one reconciled the order **reader** endpoints with the
+order **writer**, and this one reconciles the **page** routes with both. Read and write
+must agree about which Monday is in play; wherever they were derived from different
+helpers, a weekend pulled them apart. Two instances of one family of bug, not two
+coincidences — if a third `week_start()` shows up on a request path, treat it as the same
+defect until proven otherwise.
+
+- **The page routes rendered the outgoing week while ordering accepted the upcoming one.**
+  `app/routers/pages.py` computed `ws = week_start(today)` in both the weekly prompt and
+  the order grid (at the time of writing, lines 125 and 171) and filtered
+  `MenuItem.week_start == ws`, while `app/routers/orders.py` targets
+  `menu_target_week_start()`. On a Saturday or Sunday those resolve to **different
+  Mondays**.
+
+  The practical effect, reproduced end to end on production-shaped data (Sunday
+  2026-09-13, the database holding only week 2026-09-07): the page rendered week
+  2026-09-07 — five weekdays, each with dishes — and **every one of them came back
+  `orderable=False`**, while `POST /orders` for a date the page had just displayed
+  returned `400 "Cannot order for a past date"`. A full menu rendered and nothing in it
+  could be selected. Reported by the operator as *"i cant chose anything from the menu
+  which is whay i could"*. This was a **code defect, not missing data** — the menu rows
+  were present and correct the whole time.
+
+  The fix: both page call sites now use `menu_target_week_start()`, the same helper and
+  the same reasoning the order side adopted, so what a user sees and what a user can order
+  agree **by construction** rather than by coincidence. `pages.py:189` filters the user's
+  own saved `Order` rows by that same single `ws` variable, so the order filter moved with
+  the displayed week automatically and a user's saved orders for the orderable week still
+  render. On a weekday the two helpers resolve identically, so the change is a provable
+  no-op Mon–Fri.
+
+  A regression test (`tests/test_weekend_page_week.py`) pins both a Saturday and a Sunday
+  and asserts that the week the page renders equals the week ordering accepts, and that a
+  dish shown as orderable can actually be ordered end to end. It fails against the old
+  code and passes against the new.
+  `tests/test_weekly_prompt.py::TestWeeklyPayloadShape::test_each_day_carries_its_iso_date`
+  was **updated** rather than skipped, because it had encoded the old rule directly.
+
+  Deliberately **not** changed by this fix: `menu_target_week_start()` itself, the
+  scheduler cadence, and `_check_ordering_allowed`.
+
+**Still deferred (not cancelled).** Two improvements were the original plan for this work
+and were superseded once the divergence above turned out to be the actual cause of the
+operator's report. They do not fix this symptom, but they remain worth doing for
+**genuinely empty** weeks, where the current copy states only that no menu is loaded:
+
+- Self-explanatory empty-state copy that says *why* the menu is empty and *when* it is
+  expected, so a normal waiting state does not read as breakage.
+- An admin-only "pull next week's menu now" affordance. The endpoint already exists —
+  `POST /admin/parse-menu?for_next_week=true` (§5) — so this is a UI affordance over
+  existing behaviour, not new ingestion logic.
+
 ## 9. History / Notable Fixes
 
 Kept briefly for context on why the app looks the way it does — not requirements, just
@@ -517,6 +573,16 @@ provenance for anyone reading the code later:
   live site's own CSS custom properties. The operator was re-asked and confirmed the real
   tokens. Recorded because the earlier "green" instruction is still in the run history
   and is superseded.
+- **Two weekend bugs, one root cause: `week_start()` on a request path.** The weekend
+  read bug (2026-09-11, order endpoints) and the page/order divergence (2026-09-13, page
+  routes) were found and fixed a fortnight apart and looked like unrelated symptoms — one
+  hid orders the user had just placed, the other rendered a menu none of which could be
+  selected. They are the same defect: a bare `week_start()` means "the week containing
+  today", which on a Saturday or Sunday is the week that is *ending*, while every path
+  that actually accepts an order means the week that is *starting*
+  (`menu_target_week_start()`). Mixing the two on one request path is only invisible
+  Mon–Fri, when they agree. Both fixes were the same one-line-per-call-site move to
+  `menu_target_week_start()`. See §8 for both write-ups.
 - **bcrypt via the raw `bcrypt` package**, not `passlib` — `passlib` is incompatible
   with `bcrypt>=4.1`.
 - **Sticky topbar overlap bug**: `.topbar { top: 41px }` was copied verbatim from an

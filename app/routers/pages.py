@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user_optional
 from app.db import get_db
 from app.models import MenuItem, Order, User
-from app.timezone import today_local, week_start
+from app.timezone import menu_target_week_start, today_local
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
@@ -111,7 +111,7 @@ def weekly_prompt_page(
     Per-day dates are computed HERE rather than in JS. The order grid derives
     them client-side (app.html's dateForDay) and carries a scar comment about
     toISOString() shifting the date back a day in UTC+ timezones; deriving them
-    server-side from week_start()/today_local() keeps that bug from reappearing
+    server-side from menu_target_week_start()/today_local() keeps that bug from reappearing
     in a second place and gives the client an order_date it can post verbatim.
 
     `orderable` mirrors app/routers/orders.py::_check_ordering_allowed (no past
@@ -122,7 +122,7 @@ def weekly_prompt_page(
         return RedirectResponse("/login", status_code=303)
 
     today = today_local()
-    ws = week_start(today)
+    ws = menu_target_week_start(today)
     grouped_menu = menu_by_day(db, ws)
 
     days = []
@@ -168,7 +168,7 @@ def order_page(
         return RedirectResponse("/login", status_code=303)
 
     today = today_local()
-    ws = week_start(today)
+    ws = menu_target_week_start(today)
     is_weekday = today.weekday() < 5
 
     week_items = (
