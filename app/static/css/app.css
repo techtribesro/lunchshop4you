@@ -1243,6 +1243,26 @@
       overflow-y: hidden;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
+      /* SCROLL AFFORDANCE (t7 design pass).
+         Measured at 390px as admin: scrollWidth 339 vs clientWidth 205, so
+         134px -- "Přehled" and "Admin" -- sits hidden INSIDE the scrollport,
+         identically in both themes. The two rules just above deliberately
+         suppress the scrollbar, and now that the anchor renders as a clean
+         pill the container's rounded edge reads as "the nav ends here", so
+         nothing advertised the swipe.
+         This is a DISCOVERABILITY defect, not a reachability one: Tab walks
+         into both entries and the browser scrolls the port to 134 with focus
+         staying in view, and a swipe reaches them too. So the fix is purely
+         visual -- no tabindex, no ARIA, no JS, no markup change.
+         Fading the trailing edge makes the clipped pill read as a soft cut
+         that continues, rather than a hard end. mask-image needs no
+         pseudo-element (none exists on .view-nav, so nothing collides) and
+         where it is unsupported the nav simply keeps today's behaviour.
+         Scoped to this narrow block on purpose: at 1440px the nav measures
+         scrollWidth 398 == clientWidth 398, nothing is hidden, and a fade
+         there would dim a pill for no reason. */
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     }
     .view-nav::-webkit-scrollbar { display: none; }
     .view-nav button,
