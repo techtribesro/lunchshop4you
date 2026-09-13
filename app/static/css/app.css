@@ -1369,8 +1369,9 @@
   }
 
   /* ---------- Mode 1: guided weekly prompt (t11) ----------
-     Presentational only. The flow's stepping logic, the startPromptFor()
-     seam and the weekly:done event are untouched.
+     Presentational only. The flow's stepping logic and the startPromptFor()
+     seam are untouched. (The weekly:done event was removed with the
+     end-of-week question in t13.)
 
      Built from the classes already in this sheet rather than a parallel
      set: the option rows reuse .item-card's bordered-card language
@@ -1707,96 +1708,46 @@
     font-size: 13.5px;
   }
 
-  /* The "someone else?" question. A real fieldset/legend with real radios;
-     boxed off so it reads as a new question, not a footnote. */
-  .weekly-another {
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--surface-raised);
-    padding: 18px 20px;
-    margin: 20px 0 0;
-  }
-  .weekly-another legend {
-    padding: 0 8px;
-    margin-left: -8px;
-    font-family: "Fraunces", ui-serif, Georgia, serif;
-    font-weight: 600;
-    font-size: 16px;
-    color: var(--ink);
-  }
-  .weekly-another-option {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 0;
-    font-size: 14.5px;
-  }
-  .weekly-another-option input[type="radio"] {
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    accent-color: var(--accent);
-    flex: 0 0 auto;
-  }
-  .weekly-another-option label { cursor: pointer; }
-  .weekly-another-option input[type="radio"]:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-
-  .weekly-another-pick {
+  /* "Pro koho objednáváte?" -- the up-front target selector (t13). It sits
+     above the week form and is the FIRST thing answered, replacing the old
+     end-of-week "someone else?" question. Boxed off so the target reads as a
+     standing answer for the whole week rather than a footnote. */
+  .weekly-target {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid var(--line-soft);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-raised);
+    padding: 14px 18px;
+    margin: 0 0 18px;
   }
-  .weekly-another-pick[hidden] { display: none; }
-  .weekly-another-pick label {
+  .weekly-target-label {
     font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--ink-muted);
   }
-  .weekly-another-pick select {
+  .weekly-target-select {
     font: inherit;
     font-size: 13.5px;
-    padding: 9px 11px;
+    /* 44px of hit area (goal.md touch-target rule) without growing the
+       visual box: padding does the work, not a min-height on a shrunk font. */
+    padding: 12px 12px;
+    min-height: 44px;
     border-radius: 8px;
     border: 1px solid var(--line);
     background: var(--surface);
     color: var(--ink);
     min-width: 180px;
+    touch-action: manipulation;
   }
-  .weekly-another-pick select:focus-visible {
+  .weekly-target-select:focus-visible {
     outline: 2px solid var(--accent-strong);
     outline-offset: 1px;
   }
-  .weekly-another-pick button {
-    background: var(--accent);
-    color: var(--on-accent);
-    border: none;
-    border-radius: 999px;
-    padding: 10px 22px;
-    font-weight: 600;
-    font-size: 13.5px;
-    transition: background-color 0.15s ease;
-  }
-  .weekly-another-pick button:hover:not(:disabled) { background: var(--accent-strong); }
-  .weekly-another-pick button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .weekly-another-pick button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-  /* Doubles as the "Hotovo, objednávka je uzavřená." closing line, so it
-     must not read as an error. */
-  .weekly-another-status {
-    margin: 12px 0 0;
-    font-size: 13.5px;
-    color: var(--ink-muted);
-  }
-  .weekly-another-status:empty { display: none; }
 
   .weekly-empty p { margin: 0 0 10px; }
   .weekly-empty p:last-child { margin-bottom: 0; color: var(--ink-muted); font-size: 14px; }
@@ -1830,7 +1781,63 @@
     }
     .weekly-back,
     .weekly-skip { flex: 1 1 0; padding: 11px 14px; }
-    .weekly-another { padding: 16px 14px; }
-    .weekly-another-pick select,
-    .weekly-another-pick button { flex: 1 1 100%; min-width: 0; }
+    .weekly-target { padding: 14px; }
+    .weekly-target-select { flex: 1 1 100%; min-width: 0; }
   }
+
+  /* ---------- Confirmation modal (SHARED) ----------
+     PROMOTED FROM app.html's inline <style> by t11. These rules previously
+     lived only in app.html, so /modes/weekly -- which links this sheet but
+     has no inline sheet of its own -- could not render the send-out
+     confirmation at all. Promoted rather than duplicated into weekly.html:
+     one definition, no parallel styling system.
+
+     .chip-btn (the modal's Cancel) was ALREADY here at :389, so it is not
+     repeated. .btn-danger and .submit-status are promoted alongside the
+     .modal-* rules because the modal's markup uses them: without them the
+     confirm button renders as a plain accent button rather than critical
+     red, and the status line loses its ok/error colouring. */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 12, 10, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal-panel {
+    background: var(--surface-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: var(--shadow);
+  }
+  .modal-panel h3 { font-size: 17px; margin: 0 0 10px; }
+  .modal-panel p { font-size: 13.5px; color: var(--ink-muted); margin: 0 0 14px; line-height: 1.5; }
+  .modal-input {
+    width: 100%;
+    font: inherit;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .modal-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+  /* Critical-action variant of .btn-primary, used by the modal's confirm. */
+  .btn-danger { background: var(--critical); }
+  .btn-danger:hover { background: var(--critical); opacity: 0.85; }
+
+  /* Inline status line under a submit/confirm action. */
+  .submit-status { font-size: 12.5px; text-align: center; margin-top: 8px; min-height: 1.2em; }
+  .submit-status.ok { color: var(--accent-strong); }
+  .submit-status.error { color: var(--critical); }

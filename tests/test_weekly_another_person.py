@@ -1,16 +1,22 @@
-"""Coverage for Mode 1's end-of-week "order for someone else?" loop (t8).
+"""Coverage for Mode 1's "Pro koho objednáváte?" target selector (t13).
 
-The operator's requirement, verbatim: "at the end when you are done with the
-week, you get asked if you wanna order for someone else and who it is and it
-runs the same prompt".
+The operator's requirement, verbatim: "change the weekly prompt to who are you
+ordering for and default is 'me' and then a drop menu for others thats' it why
+overcomplicate".
 
-The loop itself is vanilla JS, so -- mirroring tests/test_weekly_interaction.py
--- these tests assert on the two things a route test legitimately can:
+This REPLACED t8's end-of-week "order for someone else?" question, which was
+only offered AFTER the whole week had already been submitted. The selector is
+answered UP FRONT instead, so the target is visible by construction -- no hint
+text, banner or trailing question is layered on top.
 
-1. the *markup contract* the script builds (the yes/no question, the user
-   picker and its accessible names, the #weekly-done-extra host, the
-   startPromptFor() re-entry), so a rename cannot silently unhook the loop; and
-2. the *server-side persistence contract* the loop drives -- a real
+The interaction itself is vanilla JS, so -- mirroring
+tests/test_weekly_interaction.py -- these tests assert on the two things a
+route test legitimately can:
+
+1. the *markup contract* the page ships (a real <select> with a real <label>,
+   defaulting to the logged-in user, sourced from GET /users, re-entering the
+   startPromptFor() seam), so a rename cannot silently unhook the selector; and
+2. the *server-side persistence contract* the selector drives -- a real
    POST /orders carrying `on_behalf_of`, read back through
    GET /orders/week/{username}, which is exactly what the browser performs.
 
@@ -25,48 +31,54 @@ def rendered(logged_in_client):
     return response.text
 
 
-class TestAnotherPersonMarkup:
-    def test_question_is_appended_into_the_done_extra_host(
+class TestTargetSelectorMarkup:
+    def test_selector_is_server_rendered_not_injected_after_submission(
         self, logged_in_client, menu_week
     ):
-        """t6 left #weekly-done-extra empty for this question."""
+        """The whole point of t13: the question is present on arrival, before
+        any picking. The old flow injected it into #weekly-done-extra from
+        finish(); that host and its question must be gone."""
         body = rendered(logged_in_client)
 
-        assert 'id="weekly-done-extra"' in body
-        assert "renderAnotherQuestion" in body
+        assert 'id="weekly-target-user"' in body
+        assert 'id="weekly-done-extra"' not in body
+        assert "renderAnotherQuestion" not in body
 
-    def test_question_is_bound_to_the_weekly_done_event(self, logged_in_client, menu_week):
-        """finish() dispatches weekly:done; the question hangs off that."""
+    def test_end_of_week_question_is_gone(self, logged_in_client, menu_week):
+        """Leaving BOTH the old question and the new selector in place would be
+        exactly the overcomplication the operator rejected."""
         body = rendered(logged_in_client)
 
-        assert 'document.addEventListener("weekly:done", renderAnotherQuestion)' in body
+        assert "Chcete objednat pro někoho dalšího?" not in body
+        assert "weekly:done" not in body
+        assert "weekly-another" not in body
 
     def test_question_is_asked_in_czech(self, logged_in_client, menu_week):
         """UI copy is Czech."""
         body = rendered(logged_in_client)
 
-        assert "Chcete objednat pro někoho dalšího?" in body
-        assert "Pro koho objednáváme?" in body
+        assert "Pro koho objednáváte?" in body
 
-    def test_yes_no_are_real_radio_controls(self, logged_in_client, menu_week):
-        """Must be focusable controls with accessible names, not clickable
-        divs -- wave 4 asserts on the ARIA tree."""
+    def test_selector_is_a_real_select_with_a_real_label(
+        self, logged_in_client, menu_week
+    ):
+        """Must be a focusable control with an accessible name, not a clickable
+        div -- wave 4 asserts on the ARIA tree."""
         body = rendered(logged_in_client)
 
-        assert 'input.type = "radio"' in body
-        assert 'input.name = "weekly-another"' in body
-        assert '"weekly-another-yes"' in body
-        assert '"weekly-another-no"' in body
-        assert 'label.textContent = choice.label' in body
+        assert '<select id="weekly-target-user"' in body
+        assert 'for="weekly-target-user"' in body
 
-    def test_user_picker_is_a_real_select_with_a_label(self, logged_in_client, menu_week):
+    def test_selector_defaults_to_the_logged_in_user(
+        self, logged_in_client, user, menu_week
+    ):
+        """"default is 'me'" -- rendered server-side as the selected option so
+        it is correct on arrival even before GET /users resolves."""
         body = rendered(logged_in_client)
 
-        assert 'createElement("select")' in body
-        assert 'select.id = "weekly-another-user"' in body
-        assert 'selectLabel.htmlFor = "weekly-another-user"' in body
+        assert f'<option value="{user.username}" selected>{user.username}</option>' in body
 
-    def test_picker_is_sourced_from_the_existing_users_endpoint(
+    def test_selector_is_sourced_from_the_existing_users_endpoint(
         self, logged_in_client, menu_week
     ):
         """EXISTING REGISTERED USERS ONLY -- no free-text names, no user
@@ -75,21 +87,23 @@ class TestAnotherPersonMarkup:
 
         assert 'fetch("/users"' in body
 
-    def test_choosing_yes_re_runs_the_same_prompt_via_the_seam(
+    def test_selector_does_not_offer_the_logged_in_user_twice(
         self, logged_in_client, menu_week
     ):
-        """The loop must reuse t6's stepper, not reimplement it."""
+        """"me" is already the server-rendered default; the script appends
+        only everyone else."""
         body = rendered(logged_in_client)
 
-        assert "startPromptFor(chosen)" in body
+        assert "filter(name => name !== USERNAME)" in body
+
+    def test_changing_the_selector_re_runs_the_same_prompt_via_the_seam(
+        self, logged_in_client, menu_week
+    ):
+        """The selector must reuse the existing stepper, not reimplement it."""
+        body = rendered(logged_in_client)
+
+        assert "startPromptFor(targetSelect.value)" in body
         assert "window.startPromptFor = startPromptFor" in body
-
-    def test_loop_does_not_offer_the_person_just_ordered_for(
-        self, logged_in_client, menu_week
-    ):
-        body = rendered(logged_in_client)
-
-        assert "names.filter(name => name !== targetUser)" in body
 
     def test_no_overwrite_guard_is_introduced(self, logged_in_client, menu_week):
         """goal.md ACCEPTED RISK: ordering for a colleague who already ordered
@@ -110,10 +124,10 @@ class TestUserPickerSource:
         assert other_user.username in resp.json()
 
 
-class TestSecondPassPersistence:
-    """The exact request sequence the loop performs on its second pass."""
+class TestOnBehalfPersistence:
+    """The exact request sequence the selector performs for a colleague."""
 
-    def test_second_pass_persists_under_the_target_user_id(
+    def test_ordering_for_a_colleague_persists_under_the_target_user_id(
         self, logged_in_client, menu_week, other_user, next_weekday
     ):
         day_name = next_weekday.strftime("%A")
@@ -135,11 +149,11 @@ class TestSecondPassPersistence:
         assert line["item_name"] == f"{day_name} main 1"
         assert line["note"] == "bez cibule"
 
-    def test_second_pass_leaves_the_originating_users_orders_untouched(
+    def test_ordering_for_a_colleague_leaves_my_own_orders_untouched(
         self, logged_in_client, menu_week, other_user, user, next_weekday
     ):
-        """The headline guarantee of the loop: pass two writes under the
-        other_user's user id, so the first user's rows survive unchanged."""
+        """The headline guarantee: a colleague's pass writes under the
+        colleague's user id, so my rows survive unchanged."""
         day_name = next_weekday.strftime("%A")
 
         first = logged_in_client.post(
@@ -176,10 +190,10 @@ class TestSecondPassPersistence:
         assert len(their_lines) == 1
         assert their_lines[0]["item_name"] == f"{day_name} main 2"
 
-    def test_loop_is_repeatable_person_after_person(
+    def test_selector_is_repeatable_person_after_person(
         self, logged_in_client, menu_week, other_user, admin_user, next_weekday
     ):
-        """"person after person" -- each pass lands under its own user id."""
+        """Switching the selector again lands under the next person's id."""
         day_name = next_weekday.strftime("%A")
 
         for target, item in (
