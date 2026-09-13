@@ -126,7 +126,7 @@ def seed_database(db_path: Path) -> None:
     from app.auth import hash_password
     from app.db import SessionLocal, init_db
     from app.models import MenuItem, User
-    from app.timezone import today_local, week_start
+    from app.timezone import menu_target_week_start
 
     init_db()
     db = SessionLocal()
@@ -143,7 +143,12 @@ def seed_database(db_path: Path) -> None:
             )
         db.commit()
 
-        ws = week_start(today_local())
+        # Seed the week the PAGES ACTUALLY RENDER. app/routers/pages.py and
+        # orders.py both target menu_target_week_start(); on a weekend that is
+        # the UPCOMING week, while week_start() is the outgoing one. Seeding
+        # week_start() here would populate a week no page displays, and the
+        # screenshots would show an empty menu that looks like a product bug.
+        ws = menu_target_week_start()
         if db.query(MenuItem).filter(MenuItem.week_start == ws).first() is None:
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
             for offset, day in enumerate(days):
