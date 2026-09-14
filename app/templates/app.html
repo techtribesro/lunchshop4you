@@ -163,9 +163,12 @@
             <span class="amount tabular" id="summary-total">0 Kč</span>
           </div>
           <div class="stat-kcal tabular" id="summary-total-kcal" style="text-align:right;"></div>
-          <button class="btn-primary" type="button" id="submit-order">Zaznamenat objednávku</button>
-          <p class="submit-status" id="submit-status-desktop"></p>
-          <p class="summary-note">Objednávku lze kdykoli upravit.</p>
+          <button class="btn-primary btn-draft" type="button" id="submit-order">Zaznamenat objednávku</button>
+          <p class="submit-status" id="submit-status-desktop" aria-live="polite"></p>
+          <p class="summary-note">
+            <span class="draft-badge">Rozpracované</span>
+            Uloží se jen vám. Objednávku restauraci odesílá admin.
+          </p>
         </aside>
       </div>
     </div>
@@ -175,8 +178,15 @@
         <div class="mob-total-label">Celkem</div>
         <div class="mob-total-amount tabular" id="summary-total-mobile">0 Kč</div>
         <div class="mob-count" id="summary-count-mobile">Zatím nic nevybráno</div>
+        {# The draft signal the rail carries at wide. .summary-rail is
+           display:none below 760px, so without this line a phone user gets
+           no indication at all that Zaznamenat saves rather than sends. #}
+        <div class="mob-draft-note">
+          <span class="draft-badge">Rozpracované</span>
+          <span class="mob-draft-text">odesílá admin</span>
+        </div>
       </div>
-      <button class="btn-primary" type="button" id="submit-order-mobile">Zaznamenat</button>
+      <button class="btn-primary btn-draft" type="button" id="submit-order-mobile">Zaznamenat</button>
     </div>
   </div>
 

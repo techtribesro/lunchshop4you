@@ -1914,3 +1914,71 @@
   .submit-status { font-size: var(--fs-xs); text-align: center; margin-top: 8px; min-height: 1.2em; }
   .submit-status.ok { color: var(--accent-strong); }
   .submit-status.error { color: var(--critical); }
+
+  /* ---------- Draft vs sent (t5) ----------
+     Two verbs sat on the same .btn-primary: "Zaznamenat" (saves a revisable
+     draft, POST /orders dispatches nothing) and "Odeslat" (e-mails the
+     restaurant + Telegram, irreversible). The fix DEMOTES the reversible one
+     rather than promoting it -- .send-out-btn must remain the loudest,
+     most dangerous-looking control on the page, so nothing here touches it.
+
+     Hierarchy after this block, quietest -> loudest:
+       .btn-draft     tinted turquoise, reads "safe, revisable"
+       .btn-primary   filled navy, ordinary primary actions elsewhere
+       .send-out-btn  filled red + pill + shadow, irreversible
+
+     Contrast computed (WCAG 2.1), not eyeballed:
+       --accent-strong on --accent-tint = 5.26:1 light / 7.28:1 dark
+       --ink-muted on --surface-raised  = 7.08:1 light / 7.65:1 dark
+     Status is never carried by colour alone -- the word "Rozpracované"
+     does the work, so the signal survives greyscale and screen readers. */
+  .btn-draft {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    border: 1px solid var(--accent-strong);
+    font-weight: 700;
+  }
+  .btn-draft:hover { background: var(--accent-tint); border-color: var(--accent); color: var(--accent); }
+  .btn-draft:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  /* Ordering for someone else is the higher-stakes case, so :591 fills the
+     button. That rule precedes this one and would otherwise repaint the
+     draft button solid and erase the distinction -- keep it filled there,
+     but hold the draft border so the control is still recognisably itself. */
+  body.is-ordering-on-behalf .btn-draft {
+    background: var(--accent-strong);
+    color: #ffffff;
+    border-color: var(--accent-strong);
+  }
+
+  /* Static state badge -- a <span>, never interactive. */
+  .draft-badge {
+    display: inline-block;
+    font-size: var(--fs-3xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    border-radius: var(--radius-pill);
+    padding: 2px var(--space-2);
+  }
+  .summary-note .draft-badge { margin-right: var(--space-1); }
+  /* The rail's note carries real sentences now, so centring it fights the
+     reading line. Left-align and let it wrap. */
+  .summary-rail .summary-note { text-align: left; line-height: 1.45; }
+
+  /* Hidden at wide: .mobile-actionbar itself is display:none until 760px.
+     Declared outside the media query so the rule is not duplicated. */
+  .mob-draft-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-1);
+    min-width: 0;
+  }
+  .mob-draft-text {
+    font-size: var(--fs-3xs);
+    color: var(--ink-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
