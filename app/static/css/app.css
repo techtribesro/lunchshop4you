@@ -600,14 +600,23 @@
     align-items: center;
     gap: 10px 14px;
     background: var(--accent-strong);
-    color: #ffffff;
+    /* TOKENISED (t7). Was `color: #ffffff` -- a literal paired with a
+       background token that INVERTS between themes. In dark, --accent-strong
+       is #5ad5e0, so white body text computed 1.75:1: the one warning that
+       must never be missed was the least readable thing on the page.
+       --on-accent is the token that tracks --accent-strong's polarity:
+       6.20:1 light, 10.83:1 dark. The warning is strengthened, not softened. */
+    color: var(--on-accent);
     border: 2px solid var(--accent-strong);
     border-radius: var(--radius-lg);
     padding: 14px 18px;
     margin-bottom: 18px;
     font-size: var(--fs-base);
     line-height: 1.45;
-    box-shadow: 0 4px 16px -8px rgba(12, 149, 162, 0.8);
+    /* Was rgba(12,149,162,.8) -- a hand-mixed copy of the OLD turquoise that
+       the t2 palette retired. --critical-shadow is the sheet's existing
+       theme-aware shadow token (t1 recorded its rgba as settled convention). */
+    box-shadow: var(--critical-shadow);
   }
   .on-behalf-banner[hidden] { display: none; }
   .on-behalf-banner::before {
@@ -620,19 +629,23 @@
   .on-behalf-banner strong { font-weight: 700; }
   /* The exit button sits on the turquoise banner, so it needs its own
      inverted treatment rather than the default chip colours. */
+  /* TOKENISED (t7). #0b1f3a was the OLD brand navy, retired by the t2
+     palette -- the exact literal t2 flagged for a component edit. The
+     inverted pair is now --on-accent ground / --accent ink, which tracks the
+     banner behind it: 15.20:1 light, 8.60:1 dark. */
   .on-behalf-banner .chip-btn {
     margin-left: auto;
-    background: #ffffff;
-    color: #0b1f3a;
-    border-color: #ffffff;
+    background: var(--on-accent);
+    color: var(--accent);
+    border-color: var(--on-accent);
   }
   .on-behalf-banner .chip-btn:hover {
-    background: #eaf4f6;
-    color: #0b1f3a;
-    border-color: #eaf4f6;
+    background: var(--accent-tint);
+    color: var(--accent);
+    border-color: var(--accent-tint);
   }
   .on-behalf-banner .chip-btn:focus-visible {
-    outline: 2px solid #ffffff;
+    outline: 2px solid var(--on-accent);
     outline-offset: 3px;
   }
 
@@ -651,7 +664,7 @@
   /* Submitting is the irreversible act -- mark that control too. */
   body.is-ordering-on-behalf .btn-primary {
     background: var(--accent-strong);
-    color: #ffffff;
+    color: var(--on-accent); /* TOKENISED (t7): same inversion bug as the banner. */
   }
 
   /* ---------- Order screen ---------- */
@@ -827,6 +840,16 @@
      the list, connected to nothing. It is now the right-hand column of a
      shared bordered surface with a single dividing rule between the two, so
      the total reads as belonging to the list it summarises. */
+  /* The dividing rule is drawn by the GRID, not by the rail (t7).
+     .summary-rail is `align-self: start` so it can stick while scrolling,
+     which means it stops at its own content height -- in the shipped
+     baseline the border-left it owns ended two-thirds of the way down and
+     left a bare notch beneath it, so the "one bound container" the comment
+     above describes visibly came apart. Painting the rule as a background
+     gradient on the grid itself makes it run the full height of whichever
+     column is taller, independently of the rail's own box. The rail keeps
+     its own border-left (t5 owns that declaration); this sits behind it and
+     continues the line past where the rail stops. */
   .order-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
@@ -835,6 +858,22 @@
     border: 1px solid var(--line);
     border-radius: var(--radius-lg);
     overflow: hidden;
+  }
+  /* SCOPED TO THE TWO-COLUMN LAYOUT ONLY (min-width, not max-width).
+     The narrow block at the bottom of this sheet collapses .order-grid to a
+     single column and hides the rail; if the gradient were on the base rule
+     it would keep painting at calc(100% - 300px) -- i.e. a stray 1px line
+     straight down the middle of the dish list at 390px. Verified by
+     screenshot: it did exactly that before this rule was scoped.
+     A min-width query is used deliberately so the protected narrow block
+     (the hard-won one that once put Odhlasit off-screen) needs no edit. */
+  @media (min-width: 761px) {
+    .order-grid {
+      background-image: linear-gradient(var(--line), var(--line));
+      background-repeat: no-repeat;
+      background-size: 1px 100%;
+      background-position: calc(100% - 300px) 0;
+    }
   }
   #menu-list { padding: 6px 0 10px; min-width: 0; }
 
@@ -873,9 +912,25 @@
   }
   .category-block .item-card:first-of-type { border-top: 0; }
   .item-card:not(.is-readonly):hover { background: var(--line-soft); }
+  /* SELECTED DISH (t7). The tint + inset rule stay, but colour was the ONLY
+     carrier of "this is in your order" -- ui-ux-pro-max ranks "don't convey
+     information by colour alone" as a priority-1 High. The stepper's own qty
+     is aria-hidden, so a colour-blind user had no non-colour cue at all.
+     A check glyph adds that second channel.
+     MEASURED, not assumed: a bare `content: "✓"` DID leak into the accessible
+     name -- the captured ARIA tree read "✓Mo Hlavní jídlo 1". The two-value
+     `content: "✓" / ""` form supplies empty alt text for the generated
+     content, so it paints but is not announced. The real state stays carried
+     by the named "Odebrat:/Přidat: <dish>" stepper buttons. */
   .item-card.is-selected {
     background: var(--accent-tint);
     box-shadow: inset 3px 0 0 0 var(--accent);
+  }
+  .item-card.is-selected .item-name::before {
+    content: "✓" / "";
+    color: var(--accent-strong);
+    font-weight: 700;
+    margin-right: 6px;
   }
   .item-row {
     display: flex;
