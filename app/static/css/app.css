@@ -1536,6 +1536,31 @@
     margin: 16px 0 0 16px;
     accent-color: var(--accent);
   }
+  /*
+     t9 FIX 2 of 2 -- DARK RADIOS RENDERED GREY/KHAKI.
+     `html { color-scheme: light dark }` (app.css:175) tells the UA that BOTH
+     schemes are supported, so it paints native form controls for whichever it
+     believes is active. On the dark path the UNCHECKED radio disc therefore
+     came out a warm grey/khaki against the navy card. Verified live --
+     `getComputedStyle(document.documentElement).colorScheme` returned
+     "light dark" on the dark path -- and visible in the baseline dark PNGs at
+     both viewports, where the discs read khaki while the light theme's are
+     clean white. Confirmed inherited: identical in the pre-t9 baseline.
+
+     `accent-color` above cannot fix this: it colours the CHECKED mark, not
+     the unchecked disc's own UA chrome. Declaring `color-scheme: dark` is the
+     remedy the Vercel ruleset names verbatim ("color-scheme: dark on <html>
+     for dark themes (fixes scrollbar, inputs)").
+
+     Applied to BOTH dark paths so they cannot drift -- this sheet's standing
+     invariant (app.css:147-150) is that the system-preference block and the
+     explicit opt-in stay equivalent. This is a behaviour declaration rather
+     than a colour value, so it sits beside the control it fixes instead of
+     inside the two colour-only token blocks. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { color-scheme: dark; }
   .weekly-option-label {
     flex: 1;
     display: block;
@@ -1735,6 +1760,33 @@
   }
 
   /* ---- sticky submit bar ---- */
+  /*
+     t9 FIX 1 of 2 -- OCCLUSION. Measured in the inherited state (this rule is
+     byte-identical to its pre-t2 form, so the defect is INHERITED, not caused
+     by the token work): the bar is 75.3px tall at 1440x900 and 106px at
+     390x844 (12.56% of the viewport), and `document.elementFromPoint()` at its
+     vertical centre returned `div.weekly-submitbar` / `button#weekly-submit`
+     in BOTH themes at BOTH viewports -- the bar genuinely owned pixels that
+     page content was drawn beneath. Visible in the baseline PNGs as Úterý's
+     option row and the "Poznámka" field sliced by a washed band.
+
+     Two distinct causes, fixed separately:
+
+     (a) The gradient began at `transparent`, so the upper part of the bar
+         composited content THROUGH itself -- that is the washed-band look.
+         It now reaches an opaque --paper ground sooner and holds it, so text
+         scrolling underneath is covered cleanly rather than smeared. It stays
+         a fade (a hard edge mid-page would read as a seam), but the region
+         that is actually on top no longer shows content through it.
+
+     (b) Nothing reserved the bar's height in the scroll container, so a
+         control scrolled to the bottom could come to rest underneath it.
+         Handled by `scroll-padding-bottom` on the scrolling root below.
+
+     SAFE AREA: the audit filed a second (medium) finding against this same
+     rule -- no `env(safe-area-inset-bottom)`, so on a notched phone "Objednat
+     celý týden" sits under the home indicator. `.mobile-actionbar`
+     (app.css:1411) already set the convention; this now matches it. */
   .weekly-submitbar {
     position: sticky;
     bottom: 0;
@@ -1744,9 +1796,33 @@
     align-items: center;
     gap: 12px;
     margin-top: 16px;
-    padding: 14px 0 12px;
-    background: linear-gradient(to bottom, transparent, var(--paper) 22%);
+    padding: 14px 0 calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(
+      to bottom,
+      rgb(0 0 0 / 0) 0,
+      var(--paper) 38%,
+      var(--paper) 100%
+    );
   }
+
+  /* Reserve the sticky bar's height in the SCROLL CONTAINER so the browser's
+     own scroll-into-view -- the one a keyboard Tab triggers -- can never park
+     a focused control underneath it. WCAG 2.2 AA 2.4.11 "Focus Not Obscured
+     (Minimum)"; the ui-ux-pro-max ux data names exactly this remedy
+     ("Offset sticky UI with scroll-padding", severity High).
+
+     Scoped with :has() rather than declared globally on `html`: this sheet is
+     shared by every screen and only /modes/weekly carries this bar. `:has()`
+     is already load-bearing in this sheet (app.css:1223, 1232, 1297), so it is
+     an established assumption for the browsers this app targets, not a new
+     bet; where unsupported the page simply keeps today's behaviour.
+
+     The value is the measured bar height plus breathing room, and it carries
+     the safe-area inset for the same reason the padding above does. */
+  html:has(.weekly-shell) {
+    scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+
   .weekly-tally {
     margin: 0;
     font-size: var(--fs-xs);
@@ -1763,6 +1839,10 @@
     padding: 13px 28px;
     font-weight: 600;
     font-size: var(--fs-base);
+    /* Removes the ~300ms double-tap delay on the page's PRIMARY action.
+       .weekly-target-select (app.css:1894) already establishes this on the
+       weekly screen; the submit button is the one control most worth it. */
+    touch-action: manipulation;
     transition: background-color 0.15s ease, transform 0.1s ease;
   }
   .weekly-submit:hover:not(:disabled) { background: var(--accent-strong); }
@@ -1856,6 +1936,12 @@
     .weekly-skip { flex: 1 1 0; padding: 11px 14px; }
     .weekly-target { padding: 14px; }
     .weekly-target-select { flex: 1 1 100%; min-width: 0; }
+    /* The bar is taller at 390px (106px measured, against 75.3px at 1440px)
+       because the tally wraps onto its own line above the button, so the
+       reserved scroll space grows to match. Measured, not guessed. */
+    html:has(.weekly-shell) {
+      scroll-padding-bottom: calc(122px + env(safe-area-inset-bottom));
+    }
   }
 
   /* ---------- Confirmation modal (SHARED) ----------
