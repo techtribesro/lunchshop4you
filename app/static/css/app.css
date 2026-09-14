@@ -15,87 +15,160 @@
 
     
   /* --------------------------------------------------------------------
-     golfshop4you brand palette.
-     VERIFIED values from the live site's inline custom properties:
-       navy #0B1F3A, turquoise #0FA9B8 (hover #0C95A2), light #f5f9fa,
-       muted #647078, border #dce6e9.
-     The identity is NAVY + TURQUOISE -- deliberately NOT green.
-     Token NAMES are unchanged: templates reference them directly
-     (--accent alone 24x), so only the VALUES are re-pointed.
-     NOTE: --on-accent flips to white here. It was #232528 (near-black),
-     which was legible on the old sky-blue accent but would be unreadable
-     dark-on-navy once --accent becomes #0b1f3a.
+     NON-THEME SCALES (t2 redesign).
+     Radius, type, spacing and the font stacks do NOT vary by theme, so they
+     live here ONCE rather than being triplicated into the three theme
+     blocks below. That keeps the byte-identity surface of the two dark
+     blocks minimal: those blocks are COLOUR ONLY, and a diff between them
+     can only ever be about colour.
+
+     These replace values that were previously repeated as literals:
+       * 51 border-radius declarations over 9 distinct values
+       * 95 font-size declarations over 19 distinct values
+       * 12 repeated font-family literals
+     Existing component rules are re-pointed at these tokens; none of their
+     structure, selectors or layout properties are changed by t2.
      -------------------------------------------------------------------- */
   :root {
-    --paper: #f5f9fa;
-    --surface: #ffffff;
-    --surface-raised: #ffffff;
-    --ink: #0b1f3a;
-    --ink-muted: #56636b;
-    --ink-faint: #7d8890;
-    --accent: #0b1f3a;
-    --accent-strong: #0c95a2;
-    --accent-tint: #e3f4f6;
-    --on-accent: #ffffff;
-    --line: #dce6e9;
-    --line-soft: #eaf1f3;
-    --warn: #ffa400;
-    --warn-tint: #ffedcc;
-    --critical: #c62828;
-    --critical-tint: #fbe2e2;
-    --on-critical: #ffffff;
-    --critical-hover: #a51f1f;
-    --critical-shadow: 0 2px 10px -4px rgba(11, 31, 58, 0.45);
-    --shadow: 0 1px 2px rgba(11, 31, 58, 0.08), 0 8px 24px -12px rgba(11, 31, 58, 0.25);
+    /* Type stacks. Were repeated verbatim 12x across the sheet. */
+    --font-sans: ui-sans-serif, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-serif: "Fraunces", ui-serif, Georgia, serif;
+
+    /* Type scale. The sheet had grown 19 distinct sizes (10 -> 32px) with a
+       dominant 13.5 / 12.5 / 11.5 cluster; this is that cluster regularised
+       into 9 steps. Body moves 15 -> 15.5px and the display step 32 -> 34px:
+       this is a daily-use tool read one-handed on a phone, so the reading
+       sizes go UP while the label sizes stay tight. */
+    --fs-3xs: 10.5px;   /* .you-tag, .avatar in table rows */
+    --fs-2xs: 11.5px;   /* uppercase eyebrows and section labels */
+    --fs-xs: 12.5px;    /* supporting/meta text */
+    --fs-sm: 13.5px;    /* dense UI: nav, chips, table cells */
+    --fs-base: 15.5px;  /* body copy */
+    --fs-md: 17px;      /* card titles */
+    --fs-lg: 20px;      /* section headings */
+    --fs-xl: 24px;      /* screen headings */
+    --fs-2xl: 34px;     /* /modes display title */
+
+    /* Radius scale. The large end is deliberately softened (cards 14 -> 18,
+       panels 12 -> 14) -- it is the single cheapest change that makes the
+       redesign read as new without touching one component's layout. */
+    --radius-xs: 6px;
+    --radius-sm: 8px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+    --radius-pill: 999px;
+
+    /* 4px-based spacing scale, published for the six screen tasks that
+       follow. t2 does not re-point existing padding/margin at these: that
+       would mean editing component rules, which is out of this task's
+       scope. They are defined here so the screen tasks share one ramp. */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
   }
 
+  /* --------------------------------------------------------------------
+     golfshop4you brand palette -- LIGHT value set.
+     The identity is NAVY + TURQUOISE -- deliberately NOT green. Brand
+     anchors navy #0B1F3A / turquoise #0FA9B8 are retained as the hue
+     family; t2 re-tunes LIGHTNESS for contrast and warms the ground off
+     pure white so stacked white cards are legible as separate surfaces.
+
+     EVERY pair below was computed (WCAG 2.1) before being written, not
+     eyeballed. Light theme: 0 foreground/background pairs below 4.5:1.
+     This CLOSES five contrast findings from the t1 audit:
+       --ink-faint on surface         3.62:1 -> 5.45:1
+       --ink-faint on surface-raised  3.62:1 -> 5.20:1
+       .mode-badge a-strong/a-tint    3.18:1 -> 5.26:1
+       .you-tag a-strong/raised       3.60:1 -> 5.92:1
+       (dark --ink-faint/raised       4.16:1 -> 5.11:1, in the dark blocks)
+     and regresses none of the pairs t1 recorded as already passing.
+
+     Token NAMES are unchanged: templates reference them directly, so only
+     the VALUES are re-pointed. --on-accent stays white: --accent remains a
+     deep navy here, so dark-on-navy would be unreadable.
+     -------------------------------------------------------------------- */
+  :root {
+    --paper: #eef3f5;
+    --surface: #ffffff;
+    --surface-raised: #f7fafb;
+    --ink: #0a1b31;
+    --ink-muted: #4a5761;
+    --ink-faint: #606b74;
+    --accent: #0a2647;
+    --accent-strong: #086b78;
+    --accent-tint: #dcf0f3;
+    --on-accent: #ffffff;
+    --line: #d3e0e5;
+    --line-soft: #e7eff2;
+    --warn: #8a5300;
+    --warn-tint: #ffeccc;
+    --critical: #b3261e;
+    --critical-tint: #fbe4e2;
+    --on-critical: #ffffff;
+    --critical-hover: #8c1d17;
+    --critical-shadow: 0 2px 10px -4px rgba(10, 27, 49, 0.45);
+    --shadow: 0 1px 2px rgba(10, 27, 49, 0.07), 0 10px 28px -14px rgba(10, 27, 49, 0.22);
+  }
+
+  /* DARK value set, path 1 of 2 (system preference).
+     Deepened to a true navy-black ground so the turquoise accent carries the
+     identity instead of competing with a mid-navy page. Every pair computed:
+     0 foreground/background pairs below 4.5:1.
+     MUST stay byte-identical in value to :root[data-theme="dark"] below. */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --paper: #071528;
-      --surface: #0b1f3a;
+      --paper: #050f1d;
+      --surface: #0a1c33;
       --surface-raised: #102a49;
-      --ink: #eaf4f6;
-      --ink-muted: #a3b4bd;
-      --ink-faint: #7b8c96;
-      --accent: #0fa9b8;
-      --accent-strong: #3fc6d2;
-      --accent-tint: #0e3a4a;
-      --on-accent: #04121f;
-      --line: #1d3b5c;
-      --line-soft: #16304f;
-      --warn: #ffa400;
+      --ink: #eef6f8;
+      --ink-muted: #aebfc8;
+      --ink-faint: #8b9ca6;
+      --accent: #2fc0ce;
+      --accent-strong: #5ad5e0;
+      --accent-tint: #0d3746;
+      --on-accent: #03121f;
+      --line: #1f4064;
+      --line-soft: #173252;
+      --warn: #ffb23d;
       --warn-tint: #4a3418;
-      --critical: #ef5350;
-      --critical-tint: #4a1c1c;
-      --on-critical: #04121f;
-      --critical-hover: #c62f2c;
+      --critical: #ff6b66;
+      --critical-tint: #4d1d1c;
+      --on-critical: #03121f;
+      --critical-hover: #ff8a85;
       --critical-shadow: 0 2px 10px -4px rgba(0, 0, 0, 0.7);
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
     }
   }
-  /* Explicit dark opt-in. MUST stay byte-identical in value to the
-     prefers-color-scheme block above, or the two dark paths drift. */
+  /* DARK value set, path 2 of 2 (explicit opt-in).
+     MUST stay byte-identical in value to the prefers-color-scheme block
+     above, or the two dark paths drift. */
   :root[data-theme="dark"] {
-    --paper: #071528;
-    --surface: #0b1f3a;
+    --paper: #050f1d;
+    --surface: #0a1c33;
     --surface-raised: #102a49;
-    --ink: #eaf4f6;
-    --ink-muted: #a3b4bd;
-    --ink-faint: #7b8c96;
-    --accent: #0fa9b8;
-    --accent-strong: #3fc6d2;
-    --accent-tint: #0e3a4a;
-    --on-accent: #04121f;
-    --line: #1d3b5c;
-    --line-soft: #16304f;
-    --warn: #ffa400;
+    --ink: #eef6f8;
+    --ink-muted: #aebfc8;
+    --ink-faint: #8b9ca6;
+    --accent: #2fc0ce;
+    --accent-strong: #5ad5e0;
+    --accent-tint: #0d3746;
+    --on-accent: #03121f;
+    --line: #1f4064;
+    --line-soft: #173252;
+    --warn: #ffb23d;
     --warn-tint: #4a3418;
-    --critical: #ef5350;
-    --critical-tint: #4a1c1c;
-    --on-critical: #04121f;
-    --critical-hover: #c62f2c;
+    --critical: #ff6b66;
+    --critical-tint: #4d1d1c;
+    --on-critical: #03121f;
+    --critical-hover: #ff8a85;
     --critical-shadow: 0 2px 10px -4px rgba(0, 0, 0, 0.7);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
   }
 
   * { box-sizing: border-box; }
@@ -109,14 +182,14 @@
     margin: 0;
     background: var(--paper);
     color: var(--ink);
-    font-family: ui-sans-serif, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    font-size: 15px;
+    font-family: var(--font-sans);
+    font-size: var(--fs-base);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
 
   h1, h2, h3, .wordmark, .day-label {
-    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-family: var(--font-serif);
     font-weight: 600;
     text-wrap: balance;
     margin: 0;
@@ -131,25 +204,48 @@
     cursor: pointer;
   }
 
+  /* TAP HIGHLIGHT (t4) -- set INTENTIONALLY, per the ruleset, rather than
+     left at the UA default. Safari/Chrome on iOS paint a grey rectangle over
+     the whole element box on tap, which on the pill-shaped controls here
+     (.view-nav, .send-out-btn, .chip-btn, .day-pill) flashes a SQUARE that
+     ignores border-radius, and on .link-btn now flashes the full 44px hit box
+     rather than the 19.5px of visible text. Suppressing it does NOT remove
+     tap feedback: :hover, :active (.send-out-btn translates) and
+     :focus-visible all still fire, and they follow the element's real shape.
+     Scoped to controls, not `*`, so text selection highlighting is untouched. */
+  button,
+  a,
+  summary,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   
   .screen { display: none; }
   .screen.active { display: block; }
 
   /* ---------- Login screen ---------- */
+  /* The 41px subtrahend was the height of a .topbar that login.html does NOT
+     render (it has no .topbar element at all). It centred the card inside an
+     859px box in a 900px window: measured gapTop 205.6 vs gapBottom 246.6.
+     100dvh rather than 100vh so mobile URL-bar collapse does not reintroduce
+     the same off-centre error from the other direction. */
   .login-shell {
-    min-height: calc(100vh - 41px);
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 40px 20px;
+    padding: var(--space-7) var(--space-5);
   }
+  /* radius-xl matches .mode-card: these are the app's two "arrival" surfaces,
+     and the token layer softened that end of the scale deliberately. */
   .login-card {
     width: 100%;
-    max-width: 340px;
+    max-width: 364px;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 36px 32px;
+    border-radius: var(--radius-xl);
+    padding: var(--space-6) var(--space-6) var(--space-5);
     box-shadow: var(--shadow);
   }
   /* The brand mark is a raster PNG whose ink is ~67% near-black (#1a171b)
@@ -168,19 +264,24 @@
   .login-mark {
     display: flex;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: var(--space-2);
   }
   .login-mark .brand-logo {
     height: 40px;
     max-width: 100%;
   }
+  /* The one place this screen speaks in the display voice. /modes opens with a
+     Fraunces h1; login has no heading at all (the logo carries the accessible
+     name), so this italic sub is the screen's only serif moment -- stepped up
+     to --fs-md so it reads as one rather than as body copy. */
   .login-sub {
     font-style: italic;
-    font-family: "Fraunces", serif;
+    font-family: var(--font-serif);
     font-weight: 500;
     color: var(--ink-muted);
-    font-size: 14.5px;
-    margin: 2px 0 28px;
+    font-size: var(--fs-md);
+    line-height: 1.35;
+    margin: var(--space-1) 0 var(--space-5);
   }
   .field {
     display: flex;
@@ -189,7 +290,7 @@
     margin-bottom: 16px;
   }
   .field label {
-    font-size: 12.5px;
+    font-size: var(--fs-xs);
     color: var(--ink-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -197,7 +298,7 @@
   .field input {
     font: inherit;
     padding: 10px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--line);
     background: var(--surface-raised);
     color: var(--ink);
@@ -211,10 +312,10 @@
     background: var(--accent);
     color: var(--on-accent);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 11px;
     font-weight: 600;
-    font-size: 14.5px;
+    font-size: var(--fs-base);
     margin-top: 6px;
   }
   .btn-primary {
@@ -224,9 +325,18 @@
   .btn-primary:active { transform: translateY(1px); }
   .btn-primary:disabled { transform: none; }
   .btn-primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* Error text for the login form. Replaces the inline style on login.html:27
+     which hardcoded font-size:13px -- a value not on the 9-step scale. Scoped
+     under .login-card so it can never reach app.html's .submit-status. */
+  .login-card .login-error {
+    margin: 0 0 var(--space-3);
+    font-size: var(--fs-sm);
+    color: var(--critical);
+  }
+  .login-card .login-error[hidden] { display: none; }
   .login-foot {
-    margin-top: 18px;
-    font-size: 12.5px;
+    margin-top: var(--space-4);
+    font-size: var(--fs-xs);
     color: var(--ink-faint);
     text-align: center;
   }
@@ -250,7 +360,7 @@
     display: inline-flex;
     align-items: center;
     text-decoration: none;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     flex: none;
   }
   .wordmark .brand-logo { height: 28px; }
@@ -280,7 +390,7 @@
     gap: 4px;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 3px;
   }
   /* The <a> is listed alongside the <button>s deliberately. Same failure mode
@@ -292,15 +402,21 @@
      these values) is what keeps the two from drifting apart later.
      It stays a real link to /modes: it is navigation, not a tab, so it never
      takes aria-current and never gets the active treatment below. */
+  /* HIT AREA (t4): min-height plus VERTICAL padding only. The 16px horizontal
+     padding is deliberately untouched -- these pills sit in a scrollport whose
+     width is fought over at 390px (see the narrow block), so height is the
+     only dimension free to grow here. */
   .view-nav button,
   .view-nav a {
     background: none;
     border: none;
     color: var(--ink-muted);
-    padding: 7px 16px;
-    border-radius: 999px;
-    font-size: 13.5px;
+    padding: 10px 16px;
+    border-radius: var(--radius-pill);
+    font-size: var(--fs-sm);
     font-weight: 600;
+    min-height: 44px;
+    touch-action: manipulation;
     transition: background-color 0.15s ease, color 0.15s ease;
   }
   /* The <button> is already a flex item that centres its own label; an inline
@@ -309,6 +425,7 @@
   .view-nav a {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     text-decoration: none;
   }
   .view-nav button:hover:not([aria-current="true"]),
@@ -332,15 +449,20 @@
      and a hardcoded lighter hover -- both pinned to the LIGHT red, so neither
      followed --critical into dark. The shadow haloed against the dark navy bar
      and the hover went lighter, inverting the affordance. */
+  /* HIT AREA (t4): this is the DESTRUCTIVE send-out CTA, so an undersized
+     target costs more here than on a benign control. min-height only; the
+     22px horizontal padding is unchanged. */
   .send-out-btn {
     background: var(--critical);
     color: var(--on-critical);
     border: none;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 10px 22px;
-    font-size: 14.5px;
+    font-size: var(--fs-base);
     font-weight: 700;
     letter-spacing: 0.01em;
+    min-height: 44px;
+    touch-action: manipulation;
     box-shadow: var(--critical-shadow);
     transition: background-color 0.15s ease, transform 0.1s ease;
   }
@@ -354,7 +476,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     color: var(--ink-muted);
   }
   .avatar {
@@ -367,17 +489,33 @@
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 12px;
-    font-family: "Fraunces", serif;
+    font-size: var(--fs-xs);
+    font-family: var(--font-serif);
   }
+  /* HIT AREA (t4). This was `padding: 0`, giving Odhlasit a 48.2 x 19.5px
+     target -- the smallest control in the app, present in the topbar of all
+     three authenticated templates and sitting ~6px from the right edge at
+     390px. The fix buys HEIGHT ONLY: inline-flex (so min-height applies at
+     all), then min-height to 44px.
+     WHY NO HORIZONTAL PADDING: at 390px the admin bar (nav + send-out +
+     avatar + Odhlasit) lands within a few px of the viewport edge, and an
+     earlier revision of this very change pushed Odhlasit OFF-SCREEN by
+     growing it sideways. The 48.2px content width already clears 44px, so
+     the flex row's measured width is left untouched. Re-measured at 390px
+     as ADMIN -- the configuration that regressed before. */
   .link-btn {
     background: none;
     border: none;
     color: var(--ink-muted);
-    font-size: 13px;
+    font-size: var(--fs-sm);
     text-decoration: underline;
     text-underline-offset: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 0;
+    min-height: 44px;
+    touch-action: manipulation;
     transition: color 0.15s ease;
   }
   .link-btn:hover { color: var(--ink); }
@@ -390,9 +528,9 @@
     background: var(--surface);
     color: var(--ink);
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 8px 16px;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
@@ -430,12 +568,12 @@
     gap: 8px;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 10px 14px;
   }
   .on-behalf-picker[hidden] { display: none; }
   .on-behalf-picker label {
-    font-size: 12.5px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--ink-muted);
     text-transform: uppercase;
@@ -443,9 +581,9 @@
   }
   .on-behalf-picker select {
     font: inherit;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     padding: 8px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--line);
     background: var(--surface-raised);
     color: var(--ink);
@@ -462,39 +600,52 @@
     align-items: center;
     gap: 10px 14px;
     background: var(--accent-strong);
-    color: #ffffff;
+    /* TOKENISED (t7). Was `color: #ffffff` -- a literal paired with a
+       background token that INVERTS between themes. In dark, --accent-strong
+       is #5ad5e0, so white body text computed 1.75:1: the one warning that
+       must never be missed was the least readable thing on the page.
+       --on-accent is the token that tracks --accent-strong's polarity:
+       6.20:1 light, 10.83:1 dark. The warning is strengthened, not softened. */
+    color: var(--on-accent);
     border: 2px solid var(--accent-strong);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 14px 18px;
     margin-bottom: 18px;
-    font-size: 14.5px;
+    font-size: var(--fs-base);
     line-height: 1.45;
-    box-shadow: 0 4px 16px -8px rgba(12, 149, 162, 0.8);
+    /* Was rgba(12,149,162,.8) -- a hand-mixed copy of the OLD turquoise that
+       the t2 palette retired. --critical-shadow is the sheet's existing
+       theme-aware shadow token (t1 recorded its rgba as settled convention). */
+    box-shadow: var(--critical-shadow);
   }
   .on-behalf-banner[hidden] { display: none; }
   .on-behalf-banner::before {
     content: "⇄";
     flex: 0 0 auto;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     font-weight: 700;
     line-height: 1;
   }
   .on-behalf-banner strong { font-weight: 700; }
   /* The exit button sits on the turquoise banner, so it needs its own
      inverted treatment rather than the default chip colours. */
+  /* TOKENISED (t7). #0b1f3a was the OLD brand navy, retired by the t2
+     palette -- the exact literal t2 flagged for a component edit. The
+     inverted pair is now --on-accent ground / --accent ink, which tracks the
+     banner behind it: 15.20:1 light, 8.60:1 dark. */
   .on-behalf-banner .chip-btn {
     margin-left: auto;
-    background: #ffffff;
-    color: #0b1f3a;
-    border-color: #ffffff;
+    background: var(--on-accent);
+    color: var(--accent);
+    border-color: var(--on-accent);
   }
   .on-behalf-banner .chip-btn:hover {
-    background: #eaf4f6;
-    color: #0b1f3a;
-    border-color: #eaf4f6;
+    background: var(--accent-tint);
+    color: var(--accent);
+    border-color: var(--accent-tint);
   }
   .on-behalf-banner .chip-btn:focus-visible {
-    outline: 2px solid #ffffff;
+    outline: 2px solid var(--on-accent);
     outline-offset: 3px;
   }
 
@@ -505,7 +656,7 @@
   }
   body.is-ordering-on-behalf .order-shell {
     background: var(--accent-tint);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
   }
   body.is-ordering-on-behalf .summary-rail {
     border-color: var(--accent-strong);
@@ -513,7 +664,7 @@
   /* Submitting is the irreversible act -- mark that control too. */
   body.is-ordering-on-behalf .btn-primary {
     background: var(--accent-strong);
-    color: #ffffff;
+    color: var(--on-accent); /* TOKENISED (t7): same inversion bug as the banner. */
   }
 
   /* ---------- Order screen ---------- */
@@ -539,24 +690,31 @@
     margin-bottom: 18px;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 4px;
   }
+  /* HIT AREA (t4): the day selector is a primary control -- five of them in a
+     row people tap on every visit. min-height only; the grid gives each pill
+     1fr of the shell, so width is already fixed by the track and adding
+     horizontal padding could not change it. touch-action drops the ~300ms
+     double-tap delay here as on the other controls. */
   .day-pill {
     position: relative;
     min-width: 0;            /* allow the grid track to shrink below content */
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 9px;
+    border-radius: var(--radius-md);
     padding: 7px 4px;
     text-align: center;
     overflow: hidden;
+    min-height: 44px;
+    touch-action: manipulation;
     transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
   }
   .day-pill:hover { background: var(--line-soft); }
   .day-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .day-pill .d {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--ink-muted);
     text-transform: uppercase;
@@ -566,7 +724,7 @@
   /* The long name is secondary: it never dictates the control's width. */
   .day-pill .n {
     display: block;
-    font-size: 11px;
+    font-size: var(--fs-2xs);
     color: var(--ink-faint);
     line-height: 1.25;
     margin-top: 1px;
@@ -612,23 +770,31 @@
     min-width: 220px;
     background: var(--surface-raised);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
     padding: 10px;
     margin-top: 0;
   }
+  /* HIT AREA (t4): 30.8px -> 44px via min-height. This control lives in a
+     floating disclosure panel where a mis-tap dismisses the panel entirely
+     and costs the user their place. Note on units: at 30.8px it already
+     PASSED WCAG 2.2 AA (24 CSS px for web); 44px is this project's own
+     stricter bar. Horizontal padding unchanged. */
   .people-summary {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     cursor: pointer;
     list-style: none;
-    font-size: 12.5px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--ink-muted);
     padding: 5px 12px;
+    min-height: 44px;
+    touch-action: manipulation;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--surface-raised);
     transition: border-color 0.15s ease, color 0.15s ease;
   }
@@ -637,7 +803,7 @@
   .people-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .people-summary::after {
     content: "▾";
-    font-size: 10px;
+    font-size: var(--fs-3xs);
     transition: transform 0.15s ease;
   }
   .people-disclosure[open] .people-summary::after { transform: rotate(180deg); }
@@ -647,16 +813,21 @@
     gap: 6px;
     margin-top: 10px;
   }
+  /* HIT AREA (t4): 27.5px -> 44px via min-height. Same panel, same
+     mis-tap-dismisses-the-panel cost as .people-summary above. These also
+     PASSED WCAG 2.2 AA at 27.5px; 44px is the project bar. The row already
+     wraps (flex-wrap: wrap), so added height costs no horizontal space. */
   .people-row .day-pill {
     flex: 0 0 auto;
     min-width: 0;
     background: var(--surface);
     border-color: var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 6px 14px;
-    font-size: 12.5px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--ink-muted);
+    min-height: 44px;
   }
   .people-row .day-pill[aria-current="true"] {
     background: var(--accent);
@@ -669,20 +840,46 @@
      the list, connected to nothing. It is now the right-hand column of a
      shared bordered surface with a single dividing rule between the two, so
      the total reads as belonging to the list it summarises. */
+  /* The dividing rule is drawn by the GRID, not by the rail (t7).
+     .summary-rail is `align-self: start` so it can stick while scrolling,
+     which means it stops at its own content height -- in the shipped
+     baseline the border-left it owns ended two-thirds of the way down and
+     left a bare notch beneath it, so the "one bound container" the comment
+     above describes visibly came apart. Painting the rule as a background
+     gradient on the grid itself makes it run the full height of whichever
+     column is taller, independently of the rail's own box. The rail keeps
+     its own border-left (t5 owns that declaration); this sits behind it and
+     continues the line past where the rail stops. */
   .order-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
     align-items: stretch;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     overflow: hidden;
+  }
+  /* SCOPED TO THE TWO-COLUMN LAYOUT ONLY (min-width, not max-width).
+     The narrow block at the bottom of this sheet collapses .order-grid to a
+     single column and hides the rail; if the gradient were on the base rule
+     it would keep painting at calc(100% - 300px) -- i.e. a stray 1px line
+     straight down the middle of the dish list at 390px. Verified by
+     screenshot: it did exactly that before this rule was scoped.
+     A min-width query is used deliberately so the protected narrow block
+     (the hard-won one that once put Odhlasit off-screen) needs no edit. */
+  @media (min-width: 761px) {
+    .order-grid {
+      background-image: linear-gradient(var(--line), var(--line));
+      background-repeat: no-repeat;
+      background-size: 1px 100%;
+      background-position: calc(100% - 300px) 0;
+    }
   }
   #menu-list { padding: 6px 0 10px; min-width: 0; }
 
   .category-block { margin-bottom: 6px; }
   .category-title {
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     letter-spacing: 0.02em;
     font-weight: 700;
     color: var(--ink-muted);
@@ -715,9 +912,25 @@
   }
   .category-block .item-card:first-of-type { border-top: 0; }
   .item-card:not(.is-readonly):hover { background: var(--line-soft); }
+  /* SELECTED DISH (t7). The tint + inset rule stay, but colour was the ONLY
+     carrier of "this is in your order" -- ui-ux-pro-max ranks "don't convey
+     information by colour alone" as a priority-1 High. The stepper's own qty
+     is aria-hidden, so a colour-blind user had no non-colour cue at all.
+     A check glyph adds that second channel.
+     MEASURED, not assumed: a bare `content: "✓"` DID leak into the accessible
+     name -- the captured ARIA tree read "✓Mo Hlavní jídlo 1". The two-value
+     `content: "✓" / ""` form supplies empty alt text for the generated
+     content, so it paints but is not announced. The real state stays carried
+     by the named "Odebrat:/Přidat: <dish>" stepper buttons. */
   .item-card.is-selected {
     background: var(--accent-tint);
     box-shadow: inset 3px 0 0 0 var(--accent);
+  }
+  .item-card.is-selected .item-name::before {
+    content: "✓" / "";
+    color: var(--accent-strong);
+    font-weight: 700;
+    margin-right: 6px;
   }
   .item-row {
     display: flex;
@@ -734,15 +947,15 @@
     align-items: baseline;
     gap: 2px 8px;
   }
-  .item-name { font-weight: 600; font-size: 14.5px; }
+  .item-name { font-weight: 600; font-size: var(--fs-base); }
   .item-price {
     color: var(--ink);
     font-weight: 600;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
   }
   .item-kcal {
     color: var(--ink-faint);
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 500;
   }
   .item-kcal::before { content: "· "; }
@@ -751,7 +964,7 @@
   .item-desc {
     flex: 1 0 100%;
     color: var(--ink-muted);
-    font-size: 12.5px;
+    font-size: var(--fs-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -762,7 +975,7 @@
     align-items: center;
     gap: 0;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     flex: 0 0 auto;
   }
@@ -771,7 +984,7 @@
     border: none;
     width: 30px;
     height: 30px;
-    font-size: 15px;
+    font-size: var(--fs-base);
     color: var(--ink-muted);
     display: flex;
     align-items: center;
@@ -784,7 +997,7 @@
     width: 30px;
     text-align: center;
     font-weight: 700;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
   }
   .item-card.is-selected .stepper .qty { color: var(--accent-strong); }
 
@@ -793,10 +1006,10 @@
   .note-input {
     width: 100%;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     padding: 8px 10px;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--surface-raised);
     color: var(--ink);
   }
@@ -804,7 +1017,7 @@
   .note-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   .summary-note-text {
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     font-style: italic;
     color: var(--ink-faint);
     margin-top: 2px;
@@ -825,7 +1038,7 @@
     box-shadow: none;
   }
   .summary-title {
-    font-size: 14px;
+    font-size: var(--fs-base);
     margin-bottom: 12px;
     display: flex;
     align-items: baseline;
@@ -835,15 +1048,15 @@
   /* A running item count makes the rail visibly *of* the list above it. */
   .summary-count {
     font-family: inherit;
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     font-weight: 600;
     color: var(--ink-muted);
     background: var(--line-soft);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 2px 9px;
   }
   .summary-empty {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-faint);
     padding: 12px 0 18px;
     border-top: 1px solid var(--line-soft);
@@ -852,7 +1065,7 @@
     display: flex;
     justify-content: space-between;
     gap: 10px;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     padding: 8px 0;
     border-top: 1px solid var(--line-soft);
   }
@@ -869,18 +1082,18 @@
     padding-top: 14px;
     margin-top: 4px;
     border-top: 1px solid var(--line);
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     color: var(--ink-muted);
   }
   .summary-total .amount {
-    font-family: "Fraunces", serif;
+    font-family: var(--font-serif);
     font-weight: 600;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     color: var(--ink);
   }
   .summary-rail .btn-primary { margin-top: 16px; }
   .summary-note {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-faint);
     text-align: center;
     margin-top: 10px;
@@ -900,8 +1113,8 @@
     flex-wrap: wrap;
     gap: 10px;
   }
-  .dash-head h2 { font-size: 20px; }
-  .week-range { color: var(--ink-muted); font-size: 13px; }
+  .dash-head h2 { font-size: var(--fs-lg); }
+  .week-range { color: var(--ink-muted); font-size: var(--fs-sm); }
 
   .stat-row {
     display: grid;
@@ -912,44 +1125,51 @@
   .stat-tile {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 16px 18px;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .stat-tile:hover {
-    border-color: var(--ink-faint);
-    box-shadow: 0 2px 10px -6px rgba(34, 38, 31, 0.2);
+    border-color: var(--accent-strong);
+    /* Was rgba(34, 38, 31, 0.2) -- a warm-grey shadow left from the pre-t3
+       palette, which reads as brown haze against the new navy ground. The
+       token already carries a theme-correct value for both themes. */
+    box-shadow: var(--shadow);
   }
+  /* The four tiles are two PAIRS (you / everyone) x (week / month), not four
+     peers. The label carries that relation, so it is set as a readable
+     sentence-case line rather than a tracked-out all-caps eyebrow -- the
+     latter is the templated default and it was costing legibility at
+     11.5px in dark. */
   .stat-label {
-    font-size: 11.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
     color: var(--ink-muted);
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
   }
+  .stat-label .stat-scope { color: var(--ink); font-weight: 600; }
   .stat-value {
-    font-family: "Fraunces", serif;
+    font-family: var(--font-serif);
     font-weight: 600;
-    font-size: 23px;
+    font-size: var(--fs-xl);
   }
-  .stat-value .unit { font-size: 13px; color: var(--ink-muted); font-family: ui-sans-serif, sans-serif; font-weight: 500; margin-left: 3px; }
-  .stat-kcal { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+  .stat-value .unit { font-size: var(--fs-sm); color: var(--ink-muted); font-family: ui-sans-serif, sans-serif; font-weight: 500; margin-left: 3px; }
+  .stat-kcal { font-size: var(--fs-xs); color: var(--ink-faint); margin-top: 2px; }
 
   .dash-table-wrap {
     overflow-x: auto;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     background: var(--surface);
   }
   table.dash-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     min-width: 620px;
   }
   .dash-table th {
     text-align: left;
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--ink-muted);
@@ -973,17 +1193,17 @@
     gap: 10px;
     font-weight: 600;
   }
-  .who .avatar { width: 24px; height: 24px; font-size: 10.5px; }
+  .who .avatar { width: 24px; height: 24px; font-size: var(--fs-3xs); }
   .you-tag {
-    font-size: 10.5px;
+    font-size: var(--fs-3xs);
     font-weight: 700;
     color: var(--accent-strong);
     background: var(--surface-raised);
     border: 1px solid var(--accent);
     padding: 1px 7px;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
   }
-  .items-note { color: var(--ink-muted); font-size: 12.5px; }
+  .items-note { color: var(--ink-muted); font-size: var(--fs-xs); }
   .dash-table td.num { font-weight: 600; }
   .dash-table tfoot td {
     padding: 12px 16px;
@@ -1001,33 +1221,40 @@
   .modes-shell {
     max-width: 900px;
     margin: 0 auto;
-    padding: 56px 28px 80px;
+    padding: var(--space-7) var(--space-5) 80px;
   }
   /* Sense of arrival: an eyebrow + larger title, echoing the .weekly-progress
      eyebrow on the prompt screen (t11) rather than a second label system. */
   .modes-eyebrow {
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--ink-muted);
-    margin: 0 0 6px;
+    margin: 0 0 var(--space-1);
   }
+  /* Slight negative tracking: Fraunces at --fs-2xl (34px) sets loose by
+     default, and the display line is the one moment this screen gets. */
   .modes-shell h1 {
-    font-size: 32px;
-    margin: 0 0 6px;
+    font-size: var(--fs-2xl);
+    letter-spacing: -0.015em;
+    margin: 0 0 var(--space-2);
   }
+  /* 54ch was already inside the sub-80ch guidance; 46ch tightens it to about
+     two lines at 1440px so the lede reads as one thought under the display
+     line rather than a loose third paragraph. */
   .modes-lede {
     color: var(--ink-muted);
-    margin: 0 0 32px;
-    font-size: 15.5px;
-    max-width: 54ch;
+    margin: 0 0 var(--space-6);
+    font-size: var(--fs-base);
+    max-width: 46ch;
+    text-wrap: pretty;
   }
   .modes-list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 16px;
+    gap: var(--space-3);
     /* Single column by default: the two modes are a ranked choice, read top
        to bottom, not a pair of equivalent tiles side by side. */
     grid-template-columns: 1fr;
@@ -1036,8 +1263,8 @@
     position: relative;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 22px 24px;
+    border-radius: var(--radius-xl);
+    padding: var(--space-5) var(--space-5);
     box-shadow: var(--shadow);
     display: grid;
     grid-template-columns: auto 1fr auto;
@@ -1045,7 +1272,7 @@
       "icon head  chev"
       "icon body  chev"
       "icon meta  chev";
-    column-gap: 18px;
+    column-gap: var(--space-4);
     align-items: start;
     transition: border-color 0.15s ease, transform 0.1s ease,
                 box-shadow 0.15s ease;
@@ -1069,24 +1296,24 @@
     grid-area: icon;
     width: 46px;
     height: 46px;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     display: grid;
     place-items: center;
     background: var(--accent);
     color: var(--on-accent);
-    font-family: "Fraunces", ui-serif, Georgia, serif;
-    font-size: 19px;
+    font-family: var(--font-serif);
+    font-size: var(--fs-lg);
     font-weight: 600;
     flex: none;
   }
 
   .mode-card h2 {
     grid-area: head;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     margin: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-2);
     flex-wrap: wrap;
   }
   /* The <a> stays the real focusable, named control; the pseudo-element just
@@ -1100,7 +1327,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
   }
   /* :not(.mode-meta) matters -- .mode-meta is also a <p> inside .mode-card,
      and a bare `.mode-card p { grid-area: body }` outranks `.mode-meta`
@@ -1108,33 +1335,35 @@
      so they render stacked on top of each other. */
   .mode-card p:not(.mode-meta) {
     grid-area: body;
-    margin: 4px 0 0;
+    margin: var(--space-1) 0 0;
     color: var(--ink-muted);
-    font-size: 14.5px;
+    font-size: var(--fs-base);
+    max-width: 60ch;
+    text-wrap: pretty;
   }
 
   /* Small supporting fact per mode, so each card says something the other
      does not. */
   .mode-card p.mode-meta {
     grid-area: meta;
-    margin: 10px 0 0;
-    font-size: 12.5px;
+    margin: var(--space-2) 0 0;
+    font-size: var(--fs-xs);
     color: var(--ink-faint);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1);
   }
 
   .mode-badge {
-    font-family: ui-sans-serif, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    font-size: 11px;
+    font-family: var(--font-sans);
+    font-size: var(--fs-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     background: var(--accent-tint);
     color: var(--accent-strong);
-    border-radius: 999px;
-    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    padding: 3px var(--space-2);
   }
 
   /* Affordance that the card leads somewhere. Decorative only -- the
@@ -1142,7 +1371,7 @@
   .mode-chev {
     grid-area: chev;
     color: var(--ink-faint);
-    font-size: 20px;
+    font-size: var(--fs-lg);
     line-height: 1;
     transition: transform 0.15s ease, color 0.15s ease;
   }
@@ -1163,19 +1392,19 @@
   .mode-card h2 a:focus-visible { outline: none; }
 
   @media (max-width: 760px) {
-    .modes-shell { padding: 28px 16px 64px; }
-    .modes-shell h1 { font-size: 25px; }
-    .modes-lede { margin-bottom: 22px; font-size: 15px; }
-    .modes-list { grid-template-columns: 1fr; gap: 14px; }
+    .modes-shell { padding: var(--space-6) var(--space-4) 64px; }
+    .modes-shell h1 { font-size: var(--fs-xl); }
+    .modes-lede { margin-bottom: var(--space-5); font-size: var(--fs-base); }
+    .modes-list { grid-template-columns: 1fr; gap: var(--space-3); }
     /* Comfortable thumb target at 390px: the whole card is the hit area and
-       stays well above the 44px minimum. */
+       stays well above the 44px minimum (measured 218 / 161.5px). */
     .mode-card {
-      padding: 18px 16px;
-      column-gap: 14px;
+      padding: var(--space-4) var(--space-4);
+      column-gap: var(--space-3);
       min-height: 96px;
     }
-    .mode-mark { width: 40px; height: 40px; font-size: 17px; }
-    .mode-card h2 { font-size: 18px; }
+    .mode-mark { width: 40px; height: 40px; font-size: var(--fs-md); }
+    .mode-card h2 { font-size: var(--fs-md); }
     .mode-chev { display: none; }
   }
 
@@ -1368,6 +1597,91 @@
     .stat-tile { padding: 12px 14px; }
   }
 
+  /* ---------- Dashboard + admin tables on a phone (t8) ----------
+     APPENDED, not merged into the @media (max-width:760px) block at
+     :1186-1369, which the controller marked "do not restructure".
+
+     THE DEFECT, read off evidence/before-admin-views/ rather than inferred:
+     table.dash-table carries min-width: 620px inside a .dash-table-wrap with
+     overflow-x: auto. At 390px that silently clips the right-hand columns.
+     On the dashboard, "Tento tyden", "Tento mesic" and "Kalorie (dnes)" are
+     off-screen; on the admin panel the entire "Akce" column is -- so a phone
+     admin cannot reach "Reset hesla" or "Odebrat" at all. A horizontal
+     scrollport is a legitimate answer for a wide table (and is what the
+     ux-guidelines Table Handling rule offers first), but it hides the ACTION
+     column of an admin table behind a gesture with no affordance. Its second
+     answer -- a card layout -- is the honest one here.
+
+     Each row becomes a stacked card; each cell is labelled from the column
+     header it belongs to via data-label, so no information is dropped.
+     The <table> semantics are untouched, so the ARIA tree still reports
+     table/row/cell and the a11y snapshot does not regress. */
+  @media (max-width: 760px) {
+    .dash-table-wrap { overflow-x: visible; border: none; background: none; }
+
+    table.dash-table { min-width: 0; display: block; }
+    .dash-table thead {
+      /* Visually hidden, NOT display:none -- the header cells still name the
+         columns for assistive tech. */
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .dash-table tbody, .dash-table tfoot { display: block; }
+    .dash-table tr {
+      display: block;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3) var(--space-4);
+      margin-bottom: var(--space-2);
+    }
+    .dash-table td {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: var(--space-1) 0;
+      border-bottom: none;
+      text-align: left;
+    }
+    /* The column name, taken from the header, printed beside the value. */
+    .dash-table td[data-label]::before {
+      content: attr(data-label);
+      color: var(--ink-muted);
+      font-size: var(--fs-xs);
+      flex: 0 0 auto;
+      margin-right: var(--space-3);
+    }
+    .dash-table td.num { text-align: right; }
+    /* The identity cell leads the card, so it is not label/value like the rest. */
+    .dash-table td:first-child { justify-content: flex-start; }
+    .dash-table td:first-child::before { content: none; }
+    .dash-table td .who { min-width: 0; }
+    .dash-table td:empty { display: none; }
+
+    .dash-table tr.is-you td { background: none; }
+    .dash-table tr.is-you {
+      background: var(--accent-tint);
+      border-color: var(--accent-strong);
+    }
+    .dash-table tfoot td { border-top: none; background: none; padding: var(--space-1) 0; }
+    .dash-table tfoot tr { background: var(--accent-tint); border-color: var(--accent-strong); }
+    .dash-table tfoot td[colspan] { justify-content: flex-start; }
+
+    /* The action cell gets room: these are the controls that were off-screen. */
+    .admin-row-actions { justify-content: flex-start; width: 100%; }
+
+    /* The destructive control stands alone on its own line on a phone rather
+       than sharing a row with its explanation. */
+    .admin-danger-zone { gap: var(--space-3); }
+    .admin-danger-zone .btn-primary.btn-danger { width: 100%; }
+    .admin-danger-note { flex: 1 1 100%; }
+  }
+
   /* ---------- Mode 1: guided weekly prompt (t11) ----------
      Presentational only. The flow's stepping logic and the startPromptFor()
      seam are untouched. (The weekly:done event was removed with the
@@ -1393,7 +1707,7 @@
   .weekly-shell > h1 { margin-bottom: 6px; }
   .weekly-intro {
     color: var(--ink-muted);
-    font-size: 14.5px;
+    font-size: var(--fs-base);
     margin: 0 0 22px;
   }
 
@@ -1403,7 +1717,7 @@
   .weekly-empty {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     padding: 22px 24px;
     box-shadow: var(--shadow);
   }
@@ -1411,27 +1725,27 @@
   .weekly-done[hidden] { display: none; }
 
   .weekly-progress {
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--ink-muted);
     margin: 0 0 6px;
   }
   .weekly-step-day {
-    font-size: 23px;
+    font-size: var(--fs-xl);
     margin: 0 0 4px;
   }
   /* Empty unless the flow has something to say; collapse it so it never
      leaves a mystery gap above the options. */
   .weekly-step-status {
     margin: 0;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     color: var(--critical);
   }
   .weekly-step-status:empty { display: none; }
   .weekly-step-status:not(:empty) {
     background: var(--critical-tint);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 8px 12px;
     margin: 10px 0 0;
   }
@@ -1447,7 +1761,7 @@
   }
   .weekly-options legend {
     padding: 0;
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--ink-muted);
@@ -1463,14 +1777,39 @@
     margin: 16px 0 0 16px;
     accent-color: var(--accent);
   }
+  /*
+     t9 FIX 2 of 2 -- DARK RADIOS RENDERED GREY/KHAKI.
+     `html { color-scheme: light dark }` (app.css:175) tells the UA that BOTH
+     schemes are supported, so it paints native form controls for whichever it
+     believes is active. On the dark path the UNCHECKED radio disc therefore
+     came out a warm grey/khaki against the navy card. Verified live --
+     `getComputedStyle(document.documentElement).colorScheme` returned
+     "light dark" on the dark path -- and visible in the baseline dark PNGs at
+     both viewports, where the discs read khaki while the light theme's are
+     clean white. Confirmed inherited: identical in the pre-t9 baseline.
+
+     `accent-color` above cannot fix this: it colours the CHECKED mark, not
+     the unchecked disc's own UA chrome. Declaring `color-scheme: dark` is the
+     remedy the Vercel ruleset names verbatim ("color-scheme: dark on <html>
+     for dark themes (fixes scrollbar, inputs)").
+
+     Applied to BOTH dark paths so they cannot drift -- this sheet's standing
+     invariant (app.css:147-150) is that the system-preference block and the
+     explicit opt-in stay equivalent. This is a behaviour declaration rather
+     than a colour value, so it sits beside the control it fixes instead of
+     inside the two colour-only token blocks. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { color-scheme: dark; }
   .weekly-option-label {
     flex: 1;
     display: block;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 14px 16px 14px 46px;
-    font-size: 14.5px;
+    font-size: var(--fs-base);
     cursor: pointer;
     transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
   }
@@ -1499,7 +1838,7 @@
     margin-top: 18px;
   }
   .weekly-note-label {
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--ink-muted);
@@ -1507,10 +1846,10 @@
   .weekly-note-input {
     width: 100%;
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-base);
     padding: 10px 12px;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--surface-raised);
     color: var(--ink);
   }
@@ -1538,9 +1877,9 @@
     background: var(--surface);
     color: var(--ink);
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 10px 18px;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
@@ -1565,10 +1904,10 @@
     background: var(--accent);
     color: var(--on-accent);
     border: none;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 11px 26px;
     font-weight: 600;
-    font-size: 14.5px;
+    font-size: var(--fs-base);
     transition: background-color 0.15s ease, transform 0.1s ease;
   }
   .weekly-next:hover:not(:disabled) { background: var(--accent-strong); }
@@ -1593,13 +1932,13 @@
 
   .weekly-week-status {
     margin: 0 0 14px;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     color: var(--critical);
   }
   .weekly-week-status:empty { display: none; }
   .weekly-week-status:not(:empty) {
     background: var(--critical-tint);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 10px 14px;
   }
 
@@ -1614,7 +1953,7 @@
   .weekly-day-block {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
   }
   .weekly-day-block .weekly-options {
@@ -1632,9 +1971,9 @@
      noun here, not a section eyebrow. */
   .weekly-options legend.weekly-day-legend {
     padding: 0;
-    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-family: var(--font-serif);
     font-weight: 600;
-    font-size: 18px;
+    font-size: var(--fs-md);
     color: var(--ink);
     margin-bottom: 4px;
     text-transform: none;
@@ -1642,8 +1981,8 @@
   }
   .weekly-day-block .weekly-option-label {
     padding: 11px 14px 11px 42px;
-    font-size: 14px;
-    border-radius: 10px;
+    font-size: var(--fs-base);
+    border-radius: var(--radius-md);
   }
   .weekly-day-block .weekly-option-input { margin: 13px 0 0 14px; }
   .weekly-day-block .weekly-note-row { margin-top: 12px; }
@@ -1657,11 +1996,38 @@
   .weekly-day-block.is-unavailable .weekly-day-legend { color: var(--ink-muted); }
   .weekly-day-unavailable {
     margin: 0;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     color: var(--ink-muted);
   }
 
   /* ---- sticky submit bar ---- */
+  /*
+     t9 FIX 1 of 2 -- OCCLUSION. Measured in the inherited state (this rule is
+     byte-identical to its pre-t2 form, so the defect is INHERITED, not caused
+     by the token work): the bar is 75.3px tall at 1440x900 and 106px at
+     390x844 (12.56% of the viewport), and `document.elementFromPoint()` at its
+     vertical centre returned `div.weekly-submitbar` / `button#weekly-submit`
+     in BOTH themes at BOTH viewports -- the bar genuinely owned pixels that
+     page content was drawn beneath. Visible in the baseline PNGs as Úterý's
+     option row and the "Poznámka" field sliced by a washed band.
+
+     Two distinct causes, fixed separately:
+
+     (a) The gradient began at `transparent`, so the upper part of the bar
+         composited content THROUGH itself -- that is the washed-band look.
+         It now reaches an opaque --paper ground sooner and holds it, so text
+         scrolling underneath is covered cleanly rather than smeared. It stays
+         a fade (a hard edge mid-page would read as a seam), but the region
+         that is actually on top no longer shows content through it.
+
+     (b) Nothing reserved the bar's height in the scroll container, so a
+         control scrolled to the bottom could come to rest underneath it.
+         Handled by `scroll-padding-bottom` on the scrolling root below.
+
+     SAFE AREA: the audit filed a second (medium) finding against this same
+     rule -- no `env(safe-area-inset-bottom)`, so on a notched phone "Objednat
+     celý týden" sits under the home indicator. `.mobile-actionbar`
+     (app.css:1411) already set the convention; this now matches it. */
   .weekly-submitbar {
     position: sticky;
     bottom: 0;
@@ -1671,12 +2037,36 @@
     align-items: center;
     gap: 12px;
     margin-top: 16px;
-    padding: 14px 0 12px;
-    background: linear-gradient(to bottom, transparent, var(--paper) 22%);
+    padding: 14px 0 calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(
+      to bottom,
+      rgb(0 0 0 / 0) 0,
+      var(--paper) 38%,
+      var(--paper) 100%
+    );
   }
+
+  /* Reserve the sticky bar's height in the SCROLL CONTAINER so the browser's
+     own scroll-into-view -- the one a keyboard Tab triggers -- can never park
+     a focused control underneath it. WCAG 2.2 AA 2.4.11 "Focus Not Obscured
+     (Minimum)"; the ui-ux-pro-max ux data names exactly this remedy
+     ("Offset sticky UI with scroll-padding", severity High).
+
+     Scoped with :has() rather than declared globally on `html`: this sheet is
+     shared by every screen and only /modes/weekly carries this bar. `:has()`
+     is already load-bearing in this sheet (app.css:1223, 1232, 1297), so it is
+     an established assumption for the browsers this app targets, not a new
+     bet; where unsupported the page simply keeps today's behaviour.
+
+     The value is the measured bar height plus breathing room, and it carries
+     the safe-area inset for the same reason the padding above does. */
+  html:has(.weekly-shell) {
+    scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+
   .weekly-tally {
     margin: 0;
-    font-size: 12.5px;
+    font-size: var(--fs-xs);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--ink-muted);
@@ -1686,10 +2076,14 @@
     background: var(--accent);
     color: var(--on-accent);
     border: none;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 13px 28px;
     font-weight: 600;
-    font-size: 15px;
+    font-size: var(--fs-base);
+    /* Removes the ~300ms double-tap delay on the page's PRIMARY action.
+       .weekly-target-select (app.css:1894) already establishes this on the
+       weekly screen; the submit button is the one control most worth it. */
+    touch-action: manipulation;
     transition: background-color 0.15s ease, transform 0.1s ease;
   }
   .weekly-submit:hover:not(:disabled) { background: var(--accent-strong); }
@@ -1700,12 +2094,12 @@
   /* ---- end-of-week + empty states ---- */
   .weekly-done-summary {
     margin: 6px 0 0;
-    font-size: 14.5px;
+    font-size: var(--fs-base);
     color: var(--ink-muted);
   }
   .weekly-done-back {
     margin: 18px 0 0;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
   }
 
   /* "Pro koho objednáváte?" -- the up-front target selector (t13). It sits
@@ -1718,13 +2112,13 @@
     align-items: center;
     gap: 10px;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     background: var(--surface-raised);
     padding: 14px 18px;
     margin: 0 0 18px;
   }
   .weekly-target-label {
-    font-size: 11.5px;
+    font-size: var(--fs-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -1732,12 +2126,12 @@
   }
   .weekly-target-select {
     font: inherit;
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     /* 44px of hit area (goal.md touch-target rule) without growing the
        visual box: padding does the work, not a min-height on a shrunk font. */
     padding: 12px 12px;
     min-height: 44px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--line);
     background: var(--surface);
     color: var(--ink);
@@ -1750,13 +2144,13 @@
   }
 
   .weekly-empty p { margin: 0 0 10px; }
-  .weekly-empty p:last-child { margin-bottom: 0; color: var(--ink-muted); font-size: 14px; }
+  .weekly-empty p:last-child { margin-bottom: 0; color: var(--ink-muted); font-size: var(--fs-base); }
 
   /* No-JS fallback: the script hides this, but it must still be legible. */
   .weekly-day {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 16px 18px;
     margin-bottom: 12px;
   }
@@ -1767,9 +2161,9 @@
     .weekly-shell { padding: 18px 16px 40px; }
     .weekly-step,
     .weekly-done,
-    .weekly-empty { padding: 18px 16px; border-radius: 12px; }
-    .weekly-step-day { font-size: 20px; }
-    .weekly-option-label { padding: 13px 14px 13px 44px; font-size: 14px; }
+    .weekly-empty { padding: 18px 16px; border-radius: var(--radius-lg); }
+    .weekly-step-day { font-size: var(--fs-lg); }
+    .weekly-option-label { padding: 13px 14px 13px 44px; font-size: var(--fs-base); }
     /* Full-width stacked controls, matching the order screen's mobile
        treatment: primary action first and always reachable by thumb. */
     .weekly-actions { gap: 8px; }
@@ -1783,6 +2177,12 @@
     .weekly-skip { flex: 1 1 0; padding: 11px 14px; }
     .weekly-target { padding: 14px; }
     .weekly-target-select { flex: 1 1 100%; min-width: 0; }
+    /* The bar is taller at 390px (106px measured, against 75.3px at 1440px)
+       because the tally wraps onto its own line above the button, so the
+       reserved scroll space grows to match. Measured, not guessed. */
+    html:has(.weekly-shell) {
+      scroll-padding-bottom: calc(122px + env(safe-area-inset-bottom));
+    }
   }
 
   /* ---------- Confirmation modal (SHARED) ----------
@@ -1811,19 +2211,19 @@
   .modal-panel {
     background: var(--surface-raised);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     padding: 24px;
     max-width: 400px;
     width: 100%;
     box-shadow: var(--shadow);
   }
-  .modal-panel h3 { font-size: 17px; margin: 0 0 10px; }
-  .modal-panel p { font-size: 13.5px; color: var(--ink-muted); margin: 0 0 14px; line-height: 1.5; }
+  .modal-panel h3 { font-size: var(--fs-md); margin: 0 0 10px; }
+  .modal-panel p { font-size: var(--fs-sm); color: var(--ink-muted); margin: 0 0 14px; line-height: 1.5; }
   .modal-input {
     width: 100%;
     font: inherit;
     padding: 10px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--line);
     background: var(--surface);
     color: var(--ink);
@@ -1838,6 +2238,74 @@
   .btn-danger:hover { background: var(--critical); opacity: 0.85; }
 
   /* Inline status line under a submit/confirm action. */
-  .submit-status { font-size: 12.5px; text-align: center; margin-top: 8px; min-height: 1.2em; }
+  .submit-status { font-size: var(--fs-xs); text-align: center; margin-top: 8px; min-height: 1.2em; }
   .submit-status.ok { color: var(--accent-strong); }
   .submit-status.error { color: var(--critical); }
+
+  /* ---------- Draft vs sent (t5) ----------
+     Two verbs sat on the same .btn-primary: "Zaznamenat" (saves a revisable
+     draft, POST /orders dispatches nothing) and "Odeslat" (e-mails the
+     restaurant + Telegram, irreversible). The fix DEMOTES the reversible one
+     rather than promoting it -- .send-out-btn must remain the loudest,
+     most dangerous-looking control on the page, so nothing here touches it.
+
+     Hierarchy after this block, quietest -> loudest:
+       .btn-draft     tinted turquoise, reads "safe, revisable"
+       .btn-primary   filled navy, ordinary primary actions elsewhere
+       .send-out-btn  filled red + pill + shadow, irreversible
+
+     Contrast computed (WCAG 2.1), not eyeballed:
+       --accent-strong on --accent-tint = 5.26:1 light / 7.28:1 dark
+       --ink-muted on --surface-raised  = 7.08:1 light / 7.65:1 dark
+     Status is never carried by colour alone -- the word "Rozpracované"
+     does the work, so the signal survives greyscale and screen readers. */
+  .btn-draft {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    border: 1px solid var(--accent-strong);
+    font-weight: 700;
+  }
+  .btn-draft:hover { background: var(--accent-tint); border-color: var(--accent); color: var(--accent); }
+  .btn-draft:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  /* Ordering for someone else is the higher-stakes case, so :591 fills the
+     button. That rule precedes this one and would otherwise repaint the
+     draft button solid and erase the distinction -- keep it filled there,
+     but hold the draft border so the control is still recognisably itself. */
+  body.is-ordering-on-behalf .btn-draft {
+    background: var(--accent-strong);
+    color: #ffffff;
+    border-color: var(--accent-strong);
+  }
+
+  /* Static state badge -- a <span>, never interactive. */
+  .draft-badge {
+    display: inline-block;
+    font-size: var(--fs-3xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    border-radius: var(--radius-pill);
+    padding: 2px var(--space-2);
+  }
+  .summary-note .draft-badge { margin-right: var(--space-1); }
+  /* The rail's note carries real sentences now, so centring it fights the
+     reading line. Left-align and let it wrap. */
+  .summary-rail .summary-note { text-align: left; line-height: 1.45; }
+
+  /* Hidden at wide: .mobile-actionbar itself is display:none until 760px.
+     Declared outside the media query so the rule is not duplicated. */
+  .mob-draft-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-1);
+    min-width: 0;
+  }
+  .mob-draft-text {
+    font-size: var(--fs-3xs);
+    color: var(--ink-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }

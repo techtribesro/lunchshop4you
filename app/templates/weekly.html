@@ -130,9 +130,14 @@
         {# maxlength mirrors the server's `line.note.strip()[:255]` so the UI
            cannot accept a note the backend would silently truncate. Every
            per-day note box in the week form carries the same cap. #}
+        {# autocomplete="off": a free-text note is a non-auth field, so a
+           password manager or form-filler offering saved values here is noise
+           (Vercel ruleset, Forms). The placeholder ends with an ellipsis and
+           reads as the example it is. #}
         <input type="text" id="weekly-note" class="weekly-note-input"
                maxlength="255"
-               placeholder="např. bez cibule" />
+               autocomplete="off"
+               placeholder="např. bez cibule…" />
       </div>
 
       <div class="weekly-actions">
@@ -392,7 +397,10 @@
         noteInput.className = "weekly-note-input weekly-day-note";
         noteInput.maxLength = NOTE_MAX;
         noteInput.dataset.date = day.date;
-        noteInput.placeholder = "např. bez cibule";
+        // Mirrors the server-rendered note field above: non-auth free text,
+        // so no autofill, and an example placeholder ending in an ellipsis.
+        noteInput.autocomplete = "off";
+        noteInput.placeholder = "např. bez cibule…";
         noteRow.appendChild(noteLabel);
         noteRow.appendChild(noteInput);
         fieldset.appendChild(noteRow);
