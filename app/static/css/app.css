@@ -1075,16 +1075,23 @@
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .stat-tile:hover {
-    border-color: var(--ink-faint);
-    box-shadow: 0 2px 10px -6px rgba(34, 38, 31, 0.2);
+    border-color: var(--accent-strong);
+    /* Was rgba(34, 38, 31, 0.2) -- a warm-grey shadow left from the pre-t3
+       palette, which reads as brown haze against the new navy ground. The
+       token already carries a theme-correct value for both themes. */
+    box-shadow: var(--shadow);
   }
+  /* The four tiles are two PAIRS (you / everyone) x (week / month), not four
+     peers. The label carries that relation, so it is set as a readable
+     sentence-case line rather than a tracked-out all-caps eyebrow -- the
+     latter is the templated default and it was costing legibility at
+     11.5px in dark. */
   .stat-label {
-    font-size: var(--fs-2xs);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
     color: var(--ink-muted);
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
   }
+  .stat-label .stat-scope { color: var(--ink); font-weight: 600; }
   .stat-value {
     font-family: var(--font-serif);
     font-weight: 600;
@@ -1533,6 +1540,91 @@
     .login-card { padding: 28px 20px; }
     .stat-row { grid-template-columns: 1fr 1fr; gap: 8px; }
     .stat-tile { padding: 12px 14px; }
+  }
+
+  /* ---------- Dashboard + admin tables on a phone (t8) ----------
+     APPENDED, not merged into the @media (max-width:760px) block at
+     :1186-1369, which the controller marked "do not restructure".
+
+     THE DEFECT, read off evidence/before-admin-views/ rather than inferred:
+     table.dash-table carries min-width: 620px inside a .dash-table-wrap with
+     overflow-x: auto. At 390px that silently clips the right-hand columns.
+     On the dashboard, "Tento tyden", "Tento mesic" and "Kalorie (dnes)" are
+     off-screen; on the admin panel the entire "Akce" column is -- so a phone
+     admin cannot reach "Reset hesla" or "Odebrat" at all. A horizontal
+     scrollport is a legitimate answer for a wide table (and is what the
+     ux-guidelines Table Handling rule offers first), but it hides the ACTION
+     column of an admin table behind a gesture with no affordance. Its second
+     answer -- a card layout -- is the honest one here.
+
+     Each row becomes a stacked card; each cell is labelled from the column
+     header it belongs to via data-label, so no information is dropped.
+     The <table> semantics are untouched, so the ARIA tree still reports
+     table/row/cell and the a11y snapshot does not regress. */
+  @media (max-width: 760px) {
+    .dash-table-wrap { overflow-x: visible; border: none; background: none; }
+
+    table.dash-table { min-width: 0; display: block; }
+    .dash-table thead {
+      /* Visually hidden, NOT display:none -- the header cells still name the
+         columns for assistive tech. */
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .dash-table tbody, .dash-table tfoot { display: block; }
+    .dash-table tr {
+      display: block;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3) var(--space-4);
+      margin-bottom: var(--space-2);
+    }
+    .dash-table td {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: var(--space-1) 0;
+      border-bottom: none;
+      text-align: left;
+    }
+    /* The column name, taken from the header, printed beside the value. */
+    .dash-table td[data-label]::before {
+      content: attr(data-label);
+      color: var(--ink-muted);
+      font-size: var(--fs-xs);
+      flex: 0 0 auto;
+      margin-right: var(--space-3);
+    }
+    .dash-table td.num { text-align: right; }
+    /* The identity cell leads the card, so it is not label/value like the rest. */
+    .dash-table td:first-child { justify-content: flex-start; }
+    .dash-table td:first-child::before { content: none; }
+    .dash-table td .who { min-width: 0; }
+    .dash-table td:empty { display: none; }
+
+    .dash-table tr.is-you td { background: none; }
+    .dash-table tr.is-you {
+      background: var(--accent-tint);
+      border-color: var(--accent-strong);
+    }
+    .dash-table tfoot td { border-top: none; background: none; padding: var(--space-1) 0; }
+    .dash-table tfoot tr { background: var(--accent-tint); border-color: var(--accent-strong); }
+    .dash-table tfoot td[colspan] { justify-content: flex-start; }
+
+    /* The action cell gets room: these are the controls that were off-screen. */
+    .admin-row-actions { justify-content: flex-start; width: 100%; }
+
+    /* The destructive control stands alone on its own line on a phone rather
+       than sharing a row with its explanation. */
+    .admin-danger-zone { gap: var(--space-3); }
+    .admin-danger-zone .btn-primary.btn-danger { width: 100%; }
+    .admin-danger-note { flex: 1 1 100%; }
   }
 
   /* ---------- Mode 1: guided weekly prompt (t11) ----------
