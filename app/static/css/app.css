@@ -204,6 +204,22 @@
     cursor: pointer;
   }
 
+  /* TAP HIGHLIGHT (t4) -- set INTENTIONALLY, per the ruleset, rather than
+     left at the UA default. Safari/Chrome on iOS paint a grey rectangle over
+     the whole element box on tap, which on the pill-shaped controls here
+     (.view-nav, .send-out-btn, .chip-btn, .day-pill) flashes a SQUARE that
+     ignores border-radius, and on .link-btn now flashes the full 44px hit box
+     rather than the 19.5px of visible text. Suppressing it does NOT remove
+     tap feedback: :hover, :active (.send-out-btn translates) and
+     :focus-visible all still fire, and they follow the element's real shape.
+     Scoped to controls, not `*`, so text selection highlighting is untouched. */
+  button,
+  a,
+  summary,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   
   .screen { display: none; }
   .screen.active { display: block; }
@@ -365,15 +381,21 @@
      these values) is what keeps the two from drifting apart later.
      It stays a real link to /modes: it is navigation, not a tab, so it never
      takes aria-current and never gets the active treatment below. */
+  /* HIT AREA (t4): min-height plus VERTICAL padding only. The 16px horizontal
+     padding is deliberately untouched -- these pills sit in a scrollport whose
+     width is fought over at 390px (see the narrow block), so height is the
+     only dimension free to grow here. */
   .view-nav button,
   .view-nav a {
     background: none;
     border: none;
     color: var(--ink-muted);
-    padding: 7px 16px;
+    padding: 10px 16px;
     border-radius: var(--radius-pill);
     font-size: var(--fs-sm);
     font-weight: 600;
+    min-height: 44px;
+    touch-action: manipulation;
     transition: background-color 0.15s ease, color 0.15s ease;
   }
   /* The <button> is already a flex item that centres its own label; an inline
@@ -382,6 +404,7 @@
   .view-nav a {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     text-decoration: none;
   }
   .view-nav button:hover:not([aria-current="true"]),
@@ -405,6 +428,9 @@
      and a hardcoded lighter hover -- both pinned to the LIGHT red, so neither
      followed --critical into dark. The shadow haloed against the dark navy bar
      and the hover went lighter, inverting the affordance. */
+  /* HIT AREA (t4): this is the DESTRUCTIVE send-out CTA, so an undersized
+     target costs more here than on a benign control. min-height only; the
+     22px horizontal padding is unchanged. */
   .send-out-btn {
     background: var(--critical);
     color: var(--on-critical);
@@ -414,6 +440,8 @@
     font-size: var(--fs-base);
     font-weight: 700;
     letter-spacing: 0.01em;
+    min-height: 44px;
+    touch-action: manipulation;
     box-shadow: var(--critical-shadow);
     transition: background-color 0.15s ease, transform 0.1s ease;
   }
@@ -443,6 +471,17 @@
     font-size: var(--fs-xs);
     font-family: var(--font-serif);
   }
+  /* HIT AREA (t4). This was `padding: 0`, giving Odhlasit a 48.2 x 19.5px
+     target -- the smallest control in the app, present in the topbar of all
+     three authenticated templates and sitting ~6px from the right edge at
+     390px. The fix buys HEIGHT ONLY: inline-flex (so min-height applies at
+     all), then min-height to 44px.
+     WHY NO HORIZONTAL PADDING: at 390px the admin bar (nav + send-out +
+     avatar + Odhlasit) lands within a few px of the viewport edge, and an
+     earlier revision of this very change pushed Odhlasit OFF-SCREEN by
+     growing it sideways. The 48.2px content width already clears 44px, so
+     the flex row's measured width is left untouched. Re-measured at 390px
+     as ADMIN -- the configuration that regressed before. */
   .link-btn {
     background: none;
     border: none;
@@ -450,7 +489,12 @@
     font-size: var(--fs-sm);
     text-decoration: underline;
     text-underline-offset: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 0;
+    min-height: 44px;
+    touch-action: manipulation;
     transition: color 0.15s ease;
   }
   .link-btn:hover { color: var(--ink); }
@@ -615,6 +659,11 @@
     border-radius: var(--radius-lg);
     padding: 4px;
   }
+  /* HIT AREA (t4): the day selector is a primary control -- five of them in a
+     row people tap on every visit. min-height only; the grid gives each pill
+     1fr of the shell, so width is already fixed by the track and adding
+     horizontal padding could not change it. touch-action drops the ~300ms
+     double-tap delay here as on the other controls. */
   .day-pill {
     position: relative;
     min-width: 0;            /* allow the grid track to shrink below content */
@@ -624,6 +673,8 @@
     padding: 7px 4px;
     text-align: center;
     overflow: hidden;
+    min-height: 44px;
+    touch-action: manipulation;
     transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
   }
   .day-pill:hover { background: var(--line-soft); }
@@ -690,9 +741,15 @@
     padding: 10px;
     margin-top: 0;
   }
+  /* HIT AREA (t4): 30.8px -> 44px via min-height. This control lives in a
+     floating disclosure panel where a mis-tap dismisses the panel entirely
+     and costs the user their place. Note on units: at 30.8px it already
+     PASSED WCAG 2.2 AA (24 CSS px for web); 44px is this project's own
+     stricter bar. Horizontal padding unchanged. */
   .people-summary {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     cursor: pointer;
     list-style: none;
@@ -700,6 +757,8 @@
     font-weight: 600;
     color: var(--ink-muted);
     padding: 5px 12px;
+    min-height: 44px;
+    touch-action: manipulation;
     border: 1px solid var(--line);
     border-radius: var(--radius-pill);
     background: var(--surface-raised);
@@ -720,6 +779,10 @@
     gap: 6px;
     margin-top: 10px;
   }
+  /* HIT AREA (t4): 27.5px -> 44px via min-height. Same panel, same
+     mis-tap-dismisses-the-panel cost as .people-summary above. These also
+     PASSED WCAG 2.2 AA at 27.5px; 44px is the project bar. The row already
+     wraps (flex-wrap: wrap), so added height costs no horizontal space. */
   .people-row .day-pill {
     flex: 0 0 auto;
     min-width: 0;
@@ -730,6 +793,7 @@
     font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--ink-muted);
+    min-height: 44px;
   }
   .people-row .day-pill[aria-current="true"] {
     background: var(--accent);
