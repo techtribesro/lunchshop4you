@@ -3,6 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Matches --paper in each theme (app.css:97 light, app.css:126/152 dark) so
+       mobile browser chrome stops rendering a light band above a dark page.
+       app.css:102 already declares color-scheme: light dark; this is the other
+       half of that pair. Values copied from the tokens, not invented. -->
+  <meta name="theme-color" content="#eef3f5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#050f1d" media="(prefers-color-scheme: dark)" />
   <title>Oběd — výběr režimu</title>
   <link rel="stylesheet" href="/static/css/app.css?v={{ css_version }}" />
 </head>

@@ -3,6 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Matches --paper in each theme (app.css:97 light, app.css:126/152 dark) so
+       mobile browser chrome stops rendering a light band above a dark page.
+       app.css:102 already declares color-scheme: light dark; this is the other
+       half of that pair. Values copied from the tokens, not invented. -->
+  <meta name="theme-color" content="#eef3f5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#050f1d" media="(prefers-color-scheme: dark)" />
   <title>Oběd — přihlášení</title>
   <link rel="stylesheet" href="/static/css/app.css?v={{ css_version }}" />
 </head>
@@ -24,7 +30,13 @@
           <label for="p">Heslo</label>
           <input id="p" name="password" type="password" autocomplete="current-password" required />
         </div>
-        <p id="login-error" style="display:none;color:var(--critical);font-size:13px;margin:0 0 10px;"></p>
+        <!-- role=alert + aria-live: a failed login is the one place a user is
+             BLOCKED until they react, and it was previously announced to
+             sighted users only (t1 audit, login.html:27). Kept in the DOM at
+             all times so the live region is registered before it populates.
+             Styling moved to .login-error: the old inline font-size:13px was
+             not on the 9-step type scale. -->
+        <p id="login-error" class="login-error" role="alert" aria-live="polite" hidden></p>
         <button class="btn-primary" type="submit">Přihlásit se</button>
       </form>
       <p class="login-foot">Zapomenuté heslo? Napište adminovi.</p>
@@ -35,7 +47,7 @@
     document.getElementById("login-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const errorEl = document.getElementById("login-error");
-      errorEl.style.display = "none";
+      errorEl.hidden = true;
 
       const form = e.target;
       const username = form.username.value;
@@ -56,7 +68,7 @@
       } else {
         const body = await resp.json().catch(() => ({}));
         errorEl.textContent = body.detail || "Přihlášení se nezdařilo.";
-        errorEl.style.display = "block";
+        errorEl.hidden = false;
       }
     });
   </script>
