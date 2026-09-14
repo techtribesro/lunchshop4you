@@ -11,51 +11,91 @@
     .item-card.is-readonly .item-desc { white-space: normal; overflow: visible; text-overflow: clip; }
     .item-card.is-readonly { opacity: 0.85; }
 
+    /* ---------- Admin panel (t8) ----------
+       Re-pointed at the t2/t3 token layer: every literal that used to sit in
+       this block (12px/15px/13.5px/11.5px/12.5px/999px radii) is now a token.
+       No new palette is introduced -- the navy/turquoise identity shipped by
+       t3 is the constraint, not a suggestion. */
     .admin-card {
       background: var(--surface);
       border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
+      border-radius: var(--radius-xl);
+      padding: var(--space-5);
+      margin-bottom: var(--space-5);
       transition: border-color 0.15s ease;
     }
     .admin-card:hover { border-color: var(--ink-faint); }
-    .admin-card-title { font-size: 15px; margin: 0 0 14px; }
+    .admin-card-title { font-size: var(--fs-md); margin: 0 0 var(--space-3); }
 
-    .admin-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-    .admin-actions .btn-primary { width: auto; padding: 10px 18px; }
+    .admin-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+    .admin-actions .btn-primary { width: auto; padding: var(--space-2) var(--space-4); }
     .admin-actions .submit-status { margin: 0; text-align: left; }
-    /* .btn-danger was PROMOTED to app/static/css/app.css by t11 (shared with
-       /modes/weekly's send-out modal). Do not redefine here. */
-    .admin-form { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+
+    /* ---------- The destructive zone ----------
+       "Vynutit smazani menu" previously sat as the 2nd of 6 equal-weight
+       buttons. In DARK that reads worst: the turquoise accent out-contrasts
+       the red against the ground (11.01:1 vs 6.91:1 measured), so the most
+       dangerous control was not the loudest thing on screen. This is
+       PRE-EXISTING, not caused by the token work.
+
+       The fix is ISOLATION, not more red: the action leaves the safe row
+       entirely, gets its own bordered well below a divider, and carries a
+       plain-language consequence line. Separation and position -- not
+       saturation -- are what make it unmistakable, and they survive both
+       themes and a red/green colour-vision deficit, which extra red does not.
+       The confirm() gate in the click handler is UNCHANGED. */
+    .admin-danger-zone {
+      margin-top: var(--space-5);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2) var(--space-4);
+    }
+    .admin-danger-zone .btn-primary.btn-danger {
+      width: auto;
+      padding: var(--space-2) var(--space-4);
+      margin-top: 0;
+      border: 1px solid var(--critical);
+    }
+    .admin-danger-note {
+      font-size: var(--fs-xs);
+      color: var(--ink-muted);
+      margin: 0;
+      flex: 1 1 16ch;
+      min-width: 0;
+      text-wrap: pretty;
+    }
+
+    .admin-form { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
     .admin-form .field { margin-bottom: 0; min-width: 180px; }
-    .admin-form .btn-primary { width: auto; padding: 10px 20px; }
-    .admin-checkbox { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink-muted); padding-bottom: 10px; }
+    .admin-form .btn-primary { width: auto; padding: var(--space-2) var(--space-5); }
+    .admin-checkbox { display: flex; align-items: center; gap: var(--space-1); font-size: var(--fs-sm); color: var(--ink-muted); padding-bottom: var(--space-2); }
     .role-badge {
-      display: inline-block; padding: 2px 9px; border-radius: 999px;
-      font-size: 11.5px; font-weight: 600; background: var(--line-soft); color: var(--ink-muted);
+      display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-pill);
+      font-size: var(--fs-2xs); font-weight: 600; background: var(--line-soft); color: var(--ink-muted);
     }
     .role-badge.admin { background: var(--accent-tint); color: var(--accent-strong); }
 
+    /* .chip-btn's base rule lives in app.css:462. This block previously
+       redefined it wholesale -- two competing definitions of one component.
+       Only the admin-specific deltas are kept here. */
     .chip-btn {
       display: inline-flex;
       align-items: center;
       background: var(--surface-raised);
-      border: 1px solid var(--line);
       color: var(--ink-muted);
-      font-size: 12.5px;
-      font-weight: 600;
-      padding: 5px 12px;
-      border-radius: 999px;
-      transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+      font-size: var(--fs-xs);
+      padding: var(--space-1) var(--space-3);
+      min-height: 32px;
     }
     .chip-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
-    .chip-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .chip-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .chip-btn.danger { color: var(--critical); }
-    .chip-btn.danger:hover { border-color: var(--critical); }
-    .admin-row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-    .status-note { font-size: 13.5px; color: var(--ink-muted); }
+    .chip-btn.danger:hover { border-color: var(--critical); background: var(--critical-tint); }
+    .admin-row-actions { display: flex; gap: var(--space-2); justify-content: flex-end; flex-wrap: wrap; }
+    .status-note { font-size: var(--fs-sm); color: var(--ink-muted); }
 
     /* The .modal-* rules were PROMOTED to app/static/css/app.css by t11.
        They are shared with /modes/weekly, which links the sheet but has no
@@ -63,9 +103,11 @@
 
     .field select {
       font: inherit;
-      padding: 10px 12px;
-      border-radius: 8px;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
       border: 1px solid var(--line);
+      /* Explicit background+color: Windows dark mode renders a native select
+         with system colours otherwise (web-interface-guidelines, Dark Mode). */
       background: var(--surface-raised);
       color: var(--ink);
     }
@@ -187,24 +229,27 @@
         <span class="week-range" id="dash-week-range"></span>
       </div>
 
+      {# The four tiles are two pairs, not four peers: (you / everyone) over
+         (this week / this month). The scope word is the part that differs, so
+         it carries the emphasis instead of a tracked-out all-caps eyebrow. #}
       <div class="stat-row">
         <div class="stat-tile">
-          <div class="stat-label">Tento týden · vy</div>
+          <div class="stat-label">Tento týden · <span class="stat-scope">vy</span></div>
           <div class="stat-value tabular" id="stat-week-mine">–</div>
           <div class="stat-kcal tabular" id="stat-week-mine-kcal"></div>
         </div>
         <div class="stat-tile">
-          <div class="stat-label">Tento týden · všichni</div>
+          <div class="stat-label">Tento týden · <span class="stat-scope">všichni</span></div>
           <div class="stat-value tabular" id="stat-week-all">–</div>
           <div class="stat-kcal tabular" id="stat-week-all-kcal"></div>
         </div>
         <div class="stat-tile">
-          <div class="stat-label">Tento měsíc · vy</div>
+          <div class="stat-label">Tento měsíc · <span class="stat-scope">vy</span></div>
           <div class="stat-value tabular" id="stat-month-mine">–</div>
           <div class="stat-kcal tabular" id="stat-month-mine-kcal"></div>
         </div>
         <div class="stat-tile">
-          <div class="stat-label">Tento měsíc · všichni</div>
+          <div class="stat-label">Tento měsíc · <span class="stat-scope">všichni</span></div>
           <div class="stat-value tabular" id="stat-month-all">–</div>
           <div class="stat-kcal tabular" id="stat-month-all-kcal"></div>
         </div>
@@ -226,10 +271,10 @@
           <tfoot>
             <tr>
               <td colspan="2">Součet (dnes)</td>
-              <td class="num tabular" id="dash-foot-day">0 Kč</td>
-              <td class="num tabular" id="dash-foot-week">0 Kč</td>
-              <td class="num tabular" id="dash-foot-month">0 Kč</td>
-              <td class="num tabular" id="dash-foot-kcal">0 kcal</td>
+              <td class="num tabular" id="dash-foot-day" data-label="Dnes">0 Kč</td>
+              <td class="num tabular" id="dash-foot-week" data-label="Tento týden">0 Kč</td>
+              <td class="num tabular" id="dash-foot-month" data-label="Tento měsíc">0 Kč</td>
+              <td class="num tabular" id="dash-foot-kcal" data-label="Kalorie (dnes)">0 kcal</td>
             </tr>
           </tfoot>
         </table>
@@ -251,11 +296,18 @@
           <label class="admin-checkbox">
             <input type="checkbox" id="admin-parse-next-week" /> pro příští týden
           </label>
-          <button class="btn-primary btn-danger" type="button" id="admin-clear-menu">Vynutit smazání menu (tento týden)</button>
           <button class="btn-primary" type="button" id="admin-send-summary">Odeslat dnešní objednávku</button>
           <button class="btn-primary" type="button" id="admin-send-telegram">Odeslat jen Telegram</button>
           <button class="btn-primary" type="button" id="admin-sync-sheets">Synchronizovat Google Sheets</button>
-          <p class="submit-status" id="admin-action-status"></p>
+        </div>
+        <p class="submit-status" id="admin-action-status" aria-live="polite"></p>
+
+        {# The one irreversible action on this screen is separated from the five
+           safe ones above, rather than sitting among them in the same weight.
+           Its confirm() gate is unchanged. #}
+        <div class="admin-danger-zone">
+          <button class="btn-primary btn-danger" type="button" id="admin-clear-menu">Smazat menu tohoto týdne</button>
+          <p class="admin-danger-note">Smaže celý týdenní jídelníček. Nelze vrátit zpět.</p>
         </div>
       </div>
 
@@ -293,7 +345,7 @@
           </div>
           <button class="btn-primary" type="submit">Přidat</button>
         </form>
-        <p class="submit-status" id="telegram-add-status"></p>
+        <p class="submit-status" id="telegram-add-status" aria-live="polite"></p>
       </div>
 
       <div class="admin-card">
@@ -329,7 +381,7 @@
           </label>
           <button class="btn-primary" type="submit">Vytvořit uživatele</button>
         </form>
-        <p class="submit-status" id="admin-create-status"></p>
+        <p class="submit-status" id="admin-create-status" aria-live="polite"></p>
       </div>
     </div>
   </div>
@@ -679,11 +731,11 @@
         body.innerHTML = todayRows.map(r => `
           <tr class="${r.user === USERNAME ? "is-you" : ""}">
             <td><div class="who"><div class="avatar">${initials(r.user)}</div>${r.user}${r.user === USERNAME ? '<span class="you-tag">Vy</span>' : ""}</div></td>
-            <td class="items-note">${itemsLabel(r.items_ordered)}</td>
-            <td class="num tabular">${fmt(r.daily_total_czk)}</td>
-            <td class="num tabular">${fmt(r.week_total_czk)}</td>
-            <td class="num tabular">${fmt(r.month_total_czk)}</td>
-            <td class="num tabular">${fmtKcal(r.daily_total_kcal)}</td>
+            <td class="items-note" data-label="Dnes objednáno">${itemsLabel(r.items_ordered)}</td>
+            <td class="num tabular" data-label="Dnes">${fmt(r.daily_total_czk)}</td>
+            <td class="num tabular" data-label="Tento týden">${fmt(r.week_total_czk)}</td>
+            <td class="num tabular" data-label="Tento měsíc">${fmt(r.month_total_czk)}</td>
+            <td class="num tabular" data-label="Kalorie (dnes)">${fmtKcal(r.daily_total_kcal)}</td>
           </tr>`).join("");
       }
       document.getElementById("dash-foot-day").textContent = fmt(todayRows.reduce((s, r) => s + r.daily_total_czk, 0));
@@ -870,9 +922,9 @@
       body.innerHTML = users.map(u => `
         <tr class="${u.username === USERNAME ? "is-you" : ""}">
           <td>${u.username}${u.username === USERNAME ? ' <span class="you-tag">Vy</span>' : ""}</td>
-          <td><span class="role-badge${u.is_admin ? " admin" : ""}">${u.is_admin ? "Administrátor" : "Uživatel"}</span></td>
-          <td>${new Date(u.created_at).toLocaleDateString("cs-CZ")}</td>
-          <td class="num">
+          <td data-label="Role"><span class="role-badge${u.is_admin ? " admin" : ""}">${u.is_admin ? "Administrátor" : "Uživatel"}</span></td>
+          <td data-label="Vytvořen">${new Date(u.created_at).toLocaleDateString("cs-CZ")}</td>
+          <td class="num" data-label="Akce">
             <div class="admin-row-actions">
               <button type="button" class="chip-btn" data-action="reset" data-username="${u.username}">Reset hesla</button>
               <button type="button" class="chip-btn${u.is_admin ? " danger" : ""}" data-action="toggle" data-username="${u.username}"${u.username === USERNAME ? " disabled" : ""}>${u.is_admin ? "Odebrat admina" : "Udělat adminem"}</button>
@@ -931,7 +983,7 @@
     document.getElementById("admin-clear-menu").addEventListener("click", async () => {
       if (!confirm("Opravdu smazat menu tohoto týdne? Tuto akci nelze vrátit zpět.")) return;
       const statusEl = document.getElementById("admin-action-status");
-      statusEl.textContent = "Mažu...";
+      statusEl.textContent = "Mažu…";
       statusEl.className = "submit-status";
       const resp = await fetch("/admin/clear-menu", { method: "POST" });
       const body = await resp.json().catch(() => ({}));
@@ -956,8 +1008,8 @@
       body.innerHTML = subs.map(s => `
         <tr>
           <td>${s.display_name}</td>
-          <td>${new Date(s.subscribed_at).toLocaleDateString("cs-CZ")}</td>
-          <td class="num">
+          <td data-label="Přihlášen">${new Date(s.subscribed_at).toLocaleDateString("cs-CZ")}</td>
+          <td class="num" data-label="Akce">
             <button type="button" class="chip-btn danger" data-chat-id="${s.chat_id}">Odebrat</button>
           </td>
         </tr>`).join("");
@@ -1000,7 +1052,7 @@
     document.getElementById("admin-parse-menu").addEventListener("click", async () => {
       const statusEl = document.getElementById("admin-action-status");
       const forNextWeek = document.getElementById("admin-parse-next-week").checked;
-      statusEl.textContent = "Načítám...";
+      statusEl.textContent = "Načítám…";
       statusEl.className = "submit-status";
       const resp = await fetch(`/admin/parse-menu?for_next_week=${forNextWeek}`, { method: "POST" });
       const body = await resp.json().catch(() => ({}));
@@ -1015,7 +1067,7 @@
 
     document.getElementById("admin-send-summary").addEventListener("click", async () => {
       const statusEl = document.getElementById("admin-action-status");
-      statusEl.textContent = "Odesílám...";
+      statusEl.textContent = "Odesílám…";
       statusEl.className = "submit-status";
       const resp = await fetch("/admin/send-order-summary", { method: "POST" });
       const body = await resp.json().catch(() => ({}));
@@ -1030,7 +1082,7 @@
 
     document.getElementById("admin-send-telegram").addEventListener("click", async () => {
       const statusEl = document.getElementById("admin-action-status");
-      statusEl.textContent = "Odesílám na Telegram...";
+      statusEl.textContent = "Odesílám na Telegram…";
       statusEl.className = "submit-status";
       const resp = await fetch("/admin/send-order-telegram", { method: "POST" });
       const body = await resp.json().catch(() => ({}));
@@ -1045,7 +1097,7 @@
 
     document.getElementById("admin-sync-sheets").addEventListener("click", async () => {
       const statusEl = document.getElementById("admin-action-status");
-      statusEl.textContent = "Synchronizuji...";
+      statusEl.textContent = "Synchronizuji…";
       statusEl.className = "submit-status";
       const resp = await fetch("/admin/sync-sheets", { method: "POST" });
       const body = await resp.json().catch(() => ({}));
