@@ -406,6 +406,14 @@
     const USERNAME = {{ user.username | tojson }};
     const IS_ADMIN = {{ user.is_admin | tojson }};
 
+    // Short display form ("5. 10.") matching weekly.html's server-side
+    // day_date.strftime("%-d. %-m."), kept in step by hand like dateForDay's
+    // own documented duplication across these two templates.
+    function formatDayDate(iso) {
+      const [, m, d] = iso.split("-").map(Number);
+      return `${d}. ${m}.`;
+    }
+
     function dateForDay(dayLabel) {
       const idx = DAYS.indexOf(dayLabel);
       const d = new Date(WEEK_START_ISO + "T00:00:00");
@@ -510,9 +518,10 @@
         // The visible label shortens to a 2-letter code so five days fit a
         // 390px viewport, so the FULL Czech day name is carried as the
         // accessible name rather than being lost with the text.
-        btn.setAttribute("aria-label", day + (day === TODAY ? " (dnes)" : ""));
+        const dateLabel = formatDayDate(dateForDay(day));
+        btn.setAttribute("aria-label", day + " " + dateLabel + (day === TODAY ? " (dnes)" : ""));
         btn.innerHTML = `<span class="d">${day.slice(0,2).toUpperCase()}</span>` +
-          (day === selectedDay ? `<span class="n">${day}</span>` : "");
+          `<span class="n">${day === selectedDay ? day + " " : ""}${dateLabel}</span>`;
         btn.addEventListener("click", () => { selectedDay = day; renderDays(); renderMenu(); renderSummary(); updateSubmitState(); });
         row.appendChild(btn);
       });

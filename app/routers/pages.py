@@ -133,6 +133,11 @@ def weekly_prompt_page(
             {
                 "label": label,
                 "date": day_date.isoformat(),
+                # Short Czech display form ("5. 10.") for showing the date next
+                # to the weekday label -- `date` above stays the plain ISO
+                # value the client posts verbatim, so this is additive, not a
+                # replacement.
+                "date_display": day_date.strftime("%-d. %-m."),
                 "items": grouped_menu[label],
                 # Weekday by construction (DAY_NAMES is Mon-Fri), so only the
                 # past-date half of _check_ordering_allowed can fail here.

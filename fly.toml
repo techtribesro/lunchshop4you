@@ -36,4 +36,8 @@ primary_region = "fra"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  # Bumped from 512mb: the PDF-menu LLM extraction path (pdfplumber text
+  # extraction, scanned up to MAX_MESSAGES_TO_SCAN=20 times when force-
+  # resolving a specific week) was pushing the process over 512mb and
+  # getting OOM-killed, which is what silently dropped a week's import.
+  memory = "1gb"
