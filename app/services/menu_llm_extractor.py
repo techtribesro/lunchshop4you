@@ -18,6 +18,7 @@ import pdfplumber
 
 from app.services.llm_client import LLMError, generate_json
 from app.services.menu_parser import ParsedMenuItem
+from app.timezone import week_start as monday_of_week
 
 logger = logging.getLogger("menu_llm_extractor")
 
@@ -78,9 +79,19 @@ def extract_pdf_week_start(pdf_bytes: bytes) -> date | None:
     start_day, start_month, _end_day, end_month, end_year = (int(g) for g in m.groups())
     start_year = end_year - 1 if start_month > end_month else end_year
     try:
-        return date(start_year, start_month, start_day)
+        footer_start = date(start_year, start_month, start_day)
     except ValueError:
         return None
+    # Snapped to that week's actual Monday rather than trusted as-is: on a
+    # week with a public holiday, the vendor's footer sometimes starts from
+    # the first OPEN day (e.g. "Týden 7.10.-10.10.2026" when Monday the 6th
+    # is a holiday) rather than the calendar Monday. Every other place that
+    # reads a week's menu (menu_by_day, the order grid, the weekly prompt,
+    # the admin price/calorie endpoints) keys off week_start()'s Monday, so
+    # storing under the footer's literal, un-snapped start date would file
+    # the whole week under a date nothing ever queries -- silently making a
+    # correctly-parsed week look like it was never imported at all.
+    return monday_of_week(footer_start)
 
 
 def extract_menu_with_llm(pdf_bytes: bytes) -> list[ParsedMenuItem]:
