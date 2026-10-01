@@ -162,7 +162,7 @@
     <div id="weekly-prompt">
       {% for day in days %}
       <section class="weekly-day" data-day-date="{{ day.date }}">
-        <h2>{{ day.label }}</h2>
+        <h2>{{ day.label }} <span class="weekly-day-date">{{ day.date_display }}</span></h2>
         {% if not day.items %}
         <p>Pro tento den není načtené menu.</p>
         {% elif not day.orderable %}
@@ -277,6 +277,13 @@
     const NOTE_MAX = 255;
     const LETTERS = "abcdefghijklmnopqrstuvwxyz";
 
+    // Matches the server's day_date.strftime("%-d. %-m.") used in the
+    // no-JS fallback markup, so the JS-rendered legend reads identically.
+    function formatDayDate(iso) {
+      const [, m, d] = iso.split("-").map(Number);
+      return `${d}. ${m}.`;
+    }
+
     function letterFor(index) {
       // Past 26 items fall back to a number rather than running off the
       // alphabet; the menu never gets near this, but silence beats "undefined".
@@ -333,7 +340,7 @@
 
         const legend = document.createElement("legend");
         legend.className = "weekly-day-legend";
-        legend.textContent = day.label;
+        legend.textContent = `${day.label} ${formatDayDate(day.date)}`;
         fieldset.appendChild(legend);
 
         // Past days and days with no menu are stated plainly and left
